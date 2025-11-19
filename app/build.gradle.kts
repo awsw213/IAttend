@@ -65,6 +65,7 @@ dependencies {
 
     implementation("com.google.android.material:material:1.9.0")
     implementation("androidx.appcompat:appcompat:1.6.1")
+    implementation("de.hdodenhof:circleimageview:3.1.0")
 
     // Network
     implementation("com.squareup.okhttp3:okhttp:4.11.0")

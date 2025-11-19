@@ -10,9 +10,10 @@
         android:allowBackup="true"
         android:icon="@mipmap/ic_launcher"
         android:label="@string/app_name"
-        android:theme="@style/CardView.Light">
+        android:theme="@style/Theme.IAttend">
 
         <!-- 设置LoginActivity为启动页 -->
+        <!-- 登陆页面 -->
         <activity
             android:name=".LoginActivity"
             android:exported="true">
@@ -22,12 +23,29 @@
             </intent-filter>
         </activity>
 
+        <!-- 注册页面 -->
         <activity
             android:name=".RegisterActivity"
             android:exported="false" />
 
+        <!-- 主页面 -->
         <activity
             android:name=".MainActivity"
+            android:exported="false" />
+
+        <!-- 用户中心页面 -->
+        <activity
+            android:name=".UserCenterActivity"
+            android:exported="false" />
+
+        <!-- 人像采集页面 -->
+        <activity
+            android:name=".CollectFaceActivity"
+            android:exported="false" />
+
+        <!-- 反馈信息页面 -->
+        <activity
+            android:name=".FeedbackActivity"
             android:exported="false" />
 
     </application>
