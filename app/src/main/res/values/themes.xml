@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+
+<resources>
+<style name="Theme.IAttend" parent="Theme.MaterialComponents.Light.NoActionBar">
+    <!-- 背景色：白色 -->
+    <item name="android:windowBackground">@android:color/white</item>
+    <!-- 文字主色：黑色 -->
+    <item name="android:textColorPrimary">@android:color/black</item>
+    <!-- 按钮、输入框颜色，可按需调整 -->
+</style>
+</resources>

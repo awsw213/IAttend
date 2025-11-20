@@ -1,0 +1,8 @@
+<!-- xml | c:\Users\lyq99\AndroidStudioProjects\IAttend-master\app\src\main\res\values\drawables.xml -->
+<resources>
+    <item name="clock_icon" type="drawable">@mipmap/clock_icon_foreground</item>
+    <item name="blue_line_user_icon" type="drawable">@mipmap/blue_line_user_icon_foreground</item>
+    <item name="home_icon" type="drawable">@mipmap/home_icon_foreground</item>
+    <item name="history_icon" type="drawable">@mipmap/history_icon_foreground</item>
+    <item name="personal_center_icon" type="drawable">@mipmap/personal_center_icon_foreground</item>
+</resources>

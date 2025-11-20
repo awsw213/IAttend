@@ -1,0 +1,76 @@
+<resources>
+    <string name="app_name">IAttend</string>
+
+    <string name="email">Email</string>
+    <string name="password">Password</string>
+    <string name="login">Login</string>
+    <string name="remember_password">Remember password</string>
+    <string name="register_prompt">You have not registered yet, please register an account first.</string>
+
+    <string name="sign_in">Sign in</string>
+    <string name="create">Create</string>
+    <string name="home">Home</string>
+    <string name="history">History</string>
+    <string name="personal_centre">Personal Center</string>
+    <string name="check_in">Check In</string>
+
+    <string name="enter_email">Please enter your email</string>
+    <string name="enter_password">Please enter your password</string>
+    <string name="email_format_incorrect">Email format incorrect</string>
+    <string name="network_failed">Network connection failed, please check network settings</string>
+    <string name="login_success">Login successful</string>
+    <string name="email_password_error">Email or password input error</string>
+    <string name="account_not_registered">Account not registered</string>
+    <string name="email_not_verified">Your email has not been verified yet. Please check your email and complete the verification</string>
+    <string name="password_error">Password error</string>
+
+    <string name="enter_code">Please enter 6-digit check-in code</string>
+    <string name="check_in_now">Check in now</string>
+    <string name="cancel">Cancel</string>
+    <string name="confirm">Confirm</string>
+    <string name="invalid_code">Invalid check-in code</string>
+    <string name="code_expired">Check-in code expired</string>
+    <string name="out_of_time">Out of valid time</string>
+    <string name="unable_get_location">Unable to get location</string>
+    <string name="no_gps">No GPS signal or unable to get location</string>
+    <string name="out_of_range">Location out of valid range</string>
+    <string name="checked_in">Checked in</string>
+    <string name="check_in_success">Check-in successful</string>
+    <string name="check_in_report_failed">Check-in report failed</string>
+
+    <string name="session_info">Course: %1$s\nRemaining time: %2$s\nCode: %3$s</string>
+    <string name="session_info_with_distance">Course: %1$s\nRemaining time: %2$s\nCode: %3$s\nDistance: %4$d m</string>
+    <string name="check_in_dialog_message">Distance: %1$d m\nTime: %2$s</string>
+    <string name="check_in_with_seconds">Check in\n%1$d s</string>
+    <string name="please_enter_code">Please enter the check-in code first</string>
+    <string name="please_confirm">Please confirm</string>
+    <string name="stats_format">Checked in: %1$d / Total: %2$d</string>
+    <string name="unsigned_title">Unsigned</string>
+    <string name="no_unsigned">No unsigned members</string>
+    <string name="select_participants">Select participants</string>
+    <string name="selected_count_format">Selected: %1$d</string>
+    <string name="loading_profiles">Loading participants...</string>
+    <string name="profiles_load_failed">Failed to load participants</string>
+    <string name="next_step">Next</string>
+    <string name="enable_gps_retry">Please enable GPS and retry</string>
+    <string name="session_finished">Check-in finished; cannot submit</string>
+    <string name="face_recognition_title">Face Recognition</string>
+    <string name="face_recognition_hint">Please face the camera for recognition</string>
+    <string name="face_recognition_pass">Pass</string>
+    <string name="create_session_title">Create Session</string>
+    <string name="code_generated">Check-in code generated: %1$s</string>
+    <string name="please_complete_fields">Please enter name and expected count</string>
+    <string name="please_login_first">Please sign in first</string>
+    <string name="hint_course_name">Course/Activity name</string>
+    <string name="hint_expected_count">Expected attendees</string>
+    <string name="hint_valid_minutes">Valid minutes (1–30)</string>
+    <string name="user_registration">User Registration</string>
+    <string name="name">Name</string>
+    <string name="register">Register</string>
+    <string name="login_prompt_have_account">Already have an account? Log in now.</string>
+    <string name="enter_name">Please enter your name</string>
+    <string name="password_length_limit">Password length should be at least 6 characters</string>
+    <string name="register_success_check_email">Registered successfully! Please check your email to complete verification</string>
+    <string name="email_already_registered">This email has already been registered</string>
+    <string name="verification_email_resent">Verification email resent. Please check your inbox.</string>
+</resources>
