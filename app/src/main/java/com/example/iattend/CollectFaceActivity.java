@@ -4,6 +4,7 @@ import android.content.pm.PackageManager;
 import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
 import android.graphics.Matrix;
+import android.graphics.SurfaceTexture;
 import android.hardware.Camera;
 import android.os.Bundle;
 import android.view.TextureView;
@@ -50,7 +51,7 @@ public class CollectFaceActivity extends AppCompatActivity {
         userService = new UserService();
 
         if (checkCameraPermission()) {
-            setupCamera();
+            // 相机权限已授予，等待 SurfaceTexture 就绪后 setupCamera() 会自动调用
         } else {
             requestCameraPermission();
         }
@@ -63,7 +64,33 @@ public class CollectFaceActivity extends AppCompatActivity {
         btnTakePhoto = findViewById(R.id.btnTakePhoto);
         btnRetake = findViewById(R.id.btnRetake);
         btnConfirm = findViewById(R.id.btnConfirm);
+
+        // 注册 SurfaceTexture 监听器
+        textureView.setSurfaceTextureListener(surfaceTextureListener);
     }
+
+    // SurfaceTexture 生命周期监听器
+    private TextureView.SurfaceTextureListener surfaceTextureListener = new TextureView.SurfaceTextureListener() {
+        @Override
+        public void onSurfaceTextureAvailable(SurfaceTexture surface, int width, int height) {
+            // SurfaceTexture 已就绪，此时可以安全打开相机
+            if (checkCameraPermission()) {
+                setupCamera();
+            }
+        }
+
+        @Override
+        public void onSurfaceTextureSizeChanged(SurfaceTexture surface, int width, int height) {}
+
+        @Override
+        public boolean onSurfaceTextureDestroyed(SurfaceTexture surface) {
+            releaseCamera();
+            return true;
+        }
+
+        @Override
+        public void onSurfaceTextureUpdated(SurfaceTexture surface) {}
+    };
 
     private boolean checkCameraPermission() {
         return ContextCompat.checkSelfPermission(this, android.Manifest.permission.CAMERA) == PackageManager.PERMISSION_GRANTED;
@@ -78,7 +105,11 @@ public class CollectFaceActivity extends AppCompatActivity {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults);
         if (requestCode == REQUEST_CAMERA_PERMISSION) {
             if (grantResults.length > 0 && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
-                setupCamera();
+                if (checkCameraHardware() && textureView.isAvailable()) {
+                    setupCamera();
+                } else if (!textureView.isAvailable()) {
+                    showToast("Waiting for camera preview...");
+                }
             } else {
                 showToast("Camera permission is required to take photos");
                 finish();
@@ -86,18 +117,79 @@ public class CollectFaceActivity extends AppCompatActivity {
         }
     }
 
+    // 检查设备是否有相机硬件
+    private boolean checkCameraHardware() {
+        if (getPackageManager().hasSystemFeature(PackageManager.FEATURE_CAMERA_FRONT)) {
+            return true;
+        } else if (getPackageManager().hasSystemFeature(PackageManager.FEATURE_CAMERA)) {
+            return true;
+        }
+        showToast("Device has no camera");
+        return false;
+    }
+
     private void setupCamera() {
         try {
-            camera = Camera.open(Camera.CameraInfo.CAMERA_FACING_FRONT);
+            if (!checkCameraHardware()) {
+                finish();
+                return;
+            }
+
+            // 1. 检查并获取相机ID
+            int cameraId = Camera.CameraInfo.CAMERA_FACING_FRONT;
+            Camera.CameraInfo cameraInfo = new Camera.CameraInfo();
+
+            // 验证前置摄像头是否存在
+            boolean hasFrontCamera = false;
+            int numberOfCameras = Camera.getNumberOfCameras();
+            for (int i = 0; i < numberOfCameras; i++) {
+                Camera.getCameraInfo(i, cameraInfo);
+                if (cameraInfo.facing == Camera.CameraInfo.CAMERA_FACING_FRONT) {
+                    cameraId = i;
+                    hasFrontCamera = true;
+                    break;
+                }
+            }
+
+            if (!hasFrontCamera && numberOfCameras > 0) {
+                cameraId = 0; // 使用默认摄像头
+            }
+
+            // 2. 安全打开相机
+            camera = Camera.open(cameraId);
+            if (camera == null) {
+                showToast("Failed to open camera: camera is null");
+                finish();
+                return;
+            }
+
+            // 3. 配置参数（增加兼容性检查）
             Camera.Parameters parameters = camera.getParameters();
-            parameters.setFocusMode(Camera.Parameters.FOCUS_MODE_CONTINUOUS_PICTURE);
+
+            // 安全设置对焦模式
+            if (parameters.getSupportedFocusModes() != null) {
+                if (parameters.getSupportedFocusModes().contains(Camera.Parameters.FOCUS_MODE_CONTINUOUS_PICTURE)) {
+                    parameters.setFocusMode(Camera.Parameters.FOCUS_MODE_CONTINUOUS_PICTURE);
+                } else if (parameters.getSupportedFocusModes().contains(Camera.Parameters.FOCUS_MODE_AUTO)) {
+                    parameters.setFocusMode(Camera.Parameters.FOCUS_MODE_AUTO);
+                }
+            }
+
             camera.setParameters(parameters);
 
-            camera.setPreviewTexture(textureView.getSurfaceTexture());
-            camera.startPreview();
+            // 4. 设置预览（确保 SurfaceTexture 可用）
+            if (textureView.getSurfaceTexture() != null) {
+                camera.setPreviewTexture(textureView.getSurfaceTexture());
+                camera.startPreview();
+            } else {
+                showToast("SurfaceTexture not ready");
+                finish();
+            }
+
         } catch (Exception e) {
             e.printStackTrace();
-            showToast("Failed to open camera");
+            showToast("Camera error: " + e.getMessage());
+            finish();
         }
     }
 
@@ -251,15 +343,20 @@ public class CollectFaceActivity extends AppCompatActivity {
     @Override
     protected void onResume() {
         super.onResume();
-        if (camera == null && checkCameraPermission()) {
+        // 检查 SurfaceTexture 是否已可用
+        if (camera == null && checkCameraPermission() && textureView.isAvailable()) {
             setupCamera();
         }
     }
 
     private void releaseCamera() {
         if (camera != null) {
-            camera.stopPreview();
-            camera.release();
+            try {
+                camera.stopPreview();
+                camera.release();
+            } catch (Exception e) {
+                e.printStackTrace();
+            }
             camera = null;
         }
     }
