@@ -141,6 +141,17 @@ public class MainActivity extends AppCompatActivity {
         findViewById(R.id.navPersonalCentre).setOnClickListener(v -> selectTab(2));
         selectTab(0);
 
+        // 预加载所有用户 profiles，用于显示未签到用户列表
+        SupabaseClient.getInstance().fetchAllProfiles()
+                .thenAccept(list -> runOnUiThread(() -> {
+                    cachedProfiles = list != null ? list : new java.util.ArrayList<>();
+                    Log.d("MainActivity", "Loaded " + cachedProfiles.size() + " user profiles");
+                }))
+                .exceptionally(t -> {
+                    Log.e("MainActivity", "Failed to load user profiles", t);
+                    return null;
+                });
+
         boolean fine = ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED;
         boolean coarse = ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_COARSE_LOCATION) == PackageManager.PERMISSION_GRANTED;
         if (fine || coarse) {
@@ -728,7 +739,12 @@ public class MainActivity extends AppCompatActivity {
                     }
 
                     java.util.List<com.example.iattend.data.remote.model.UserProfile> unsigned = new java.util.ArrayList<>();
+                    Log.d("MainActivity", "loadSessionStats: selectedUserIds=" + selectedUserIds.size()
+                            + ", cachedProfiles=" + (cachedProfiles != null ? cachedProfiles.size() : 0)
+                            + ", checkedIds=" + checkedIds.size());
+
                     if (!selectedUserIds.isEmpty()) {
+                        // 如果创建签到时选择了特定用户，只显示这些用户中未签到的
                         for (String uid : selectedUserIds) {
                             if (!checkedIds.contains(uid)) {
                                 com.example.iattend.data.remote.model.UserProfile found = null;
@@ -744,7 +760,18 @@ public class MainActivity extends AppCompatActivity {
                                 unsigned.add(found);
                             }
                         }
+                    } else {
+                        // 如果没有选择特定用户，显示所有用户中未签到的
+                        if (cachedProfiles != null) {
+                            for (com.example.iattend.data.remote.model.UserProfile p : cachedProfiles) {
+                                if (p != null && !checkedIds.contains(p.getUserId())) {
+                                    unsigned.add(p);
+                                }
+                            }
+                        }
                     }
+
+                    Log.d("MainActivity", "loadSessionStats: unsigned.size=" + unsigned.size());
 
                     if (!unsigned.isEmpty()) {
                         tvNoUnsigned.setVisibility(View.GONE);
