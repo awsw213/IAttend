@@ -30,6 +30,9 @@ import com.amap.api.maps.CameraUpdateFactory;
 import com.amap.api.maps.MapView;
 import com.amap.api.maps.model.LatLng;
 import com.amap.api.maps.model.MyLocationStyle;
+import com.amap.api.maps.model.Circle;
+import com.amap.api.maps.model.CircleOptions;
+import android.graphics.Color;
 import com.example.iattend.data.remote.SupabaseClient;
 import com.example.iattend.data.remote.config.SupabaseConfig;
 import com.example.iattend.ui.ProgressArcView;
@@ -80,6 +83,9 @@ public class MainActivity extends AppCompatActivity implements AMapLocationListe
     private LatLng mCurrentLatLng;
     private AMapLocation lastLocation;
     private boolean isFirstLoc = true;
+    private Circle fenceCircle;
+    private Double pendingOpenLat, pendingOpenLon, pendingOpenRadius;
+    private boolean pendingOpenMap = false;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -109,7 +115,7 @@ public class MainActivity extends AppCompatActivity implements AMapLocationListe
         unsignedAdapter = new UnsignedAdapter();
         rvUnsigned.setAdapter(unsignedAdapter);
         findViewById(R.id.btnCreate).setOnClickListener(v -> showCreateSessionDialog());
-        btnDoCheckIn.setOnClickListener(v -> { if (pendingSession == null) showCodeDialog(); else confirmCheckIn(); });
+        btnDoCheckIn.setOnClickListener(v -> showCodeDialog());
 
         tvHome = findViewById(R.id.tvHome);
 
@@ -213,10 +219,21 @@ public class MainActivity extends AppCompatActivity implements AMapLocationListe
             double cLat = session.location_data != null && session.location_data.lat != null ? session.location_data.lat : session.center_lat;
             double cLon = session.location_data != null && session.location_data.lon != null ? session.location_data.lon : session.center_lon;
             double rad = session.location_data != null && session.location_data.radius_m != null ? session.location_data.radius_m : (session.radius_m != null ? session.radius_m : 0.0);
-            setFenceOnMap(cLat, cLon, rad);
-            ensureLocationPermission();
+            boolean fine = ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED;
+            boolean coarse = ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_COARSE_LOCATION) == PackageManager.PERMISSION_GRANTED;
+            if (fine || coarse) {
+                openSignInMap(cLat, cLon, rad);
+                initLocationConfig();
+            } else {
+                pendingOpenLat = cLat;
+                pendingOpenLon = cLon;
+                pendingOpenRadius = rad;
+                pendingOpenMap = true;
+                ActivityCompat.requestPermissions(this, new String[]{Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION}, REQUEST_LOCATION_PERMISSION);
+            }
             startCountdown(endMs);
             startStatsPolling(code);
+            confirmCheckIn();
         })).exceptionally(t -> {
             runOnUiThread(() -> Toast.makeText(this, getString(R.string.network_failed), Toast.LENGTH_SHORT).show());
             return null;
@@ -240,6 +257,11 @@ public class MainActivity extends AppCompatActivity implements AMapLocationListe
             boolean granted = grantResults.length > 0 && grantResults[0] == PackageManager.PERMISSION_GRANTED;
             if (granted) {
                 initLocationConfig();
+                if (pendingOpenMap && pendingOpenLat != null && pendingOpenLon != null && pendingOpenRadius != null) {
+                    openSignInMap(pendingOpenLat, pendingOpenLon, pendingOpenRadius);
+                }
+                pendingOpenMap = false;
+                pendingOpenLat = null; pendingOpenLon = null; pendingOpenRadius = null;
             } else {
                 Toast.makeText(this, getString(R.string.unable_get_location), Toast.LENGTH_SHORT).show();
             }
@@ -346,12 +368,22 @@ public class MainActivity extends AppCompatActivity implements AMapLocationListe
         if (aMap == null) {
             return;
         }
+        if (fenceCircle != null) {
+            fenceCircle.remove();
+            fenceCircle = null;
+        }
+        fenceCircle = aMap.addCircle(new CircleOptions()
+                .center(new LatLng(lat, lon))
+                .radius(radius)
+                .strokeColor(Color.parseColor("#4CAF50"))
+                .strokeWidth(3f)
+                .fillColor(Color.parseColor("#334CAF50"))
+        );
+        aMap.moveCamera(CameraUpdateFactory.newLatLngZoom(new LatLng(lat, lon), 15));
+    }
+
+    private void openSignInMap(double lat, double lon, double radius) {
         MapActivity.start(MainActivity.this, lat, lon, radius);
-//        if (webView != null) {
-//            webView.evaluateJavascript("setFence(" + lat + "," + lon + "," + radius + ")", null);
-//        }
-//        CameraUpdate cameraUpdate = CameraUpdateFactory.newLatLngZoom(new LatLng(lat, lon), 15);
-//        googleMap.moveCamera(cameraUpdate);
     }
 
     @Override
@@ -402,8 +434,13 @@ public class MainActivity extends AppCompatActivity implements AMapLocationListe
         countdownTask = new Runnable() {
             @Override public void run() {
                 long remain = endMs - System.currentTimeMillis();
-                long sec = Math.max(0, remain / 1000);
-                btnDoCheckIn.setText(getString(R.string.check_in_with_seconds, sec));
+                btnDoCheckIn.setText(getString(R.string.check_in));
+                Long e = parseIsoToMillis(pendingSession != null ? pendingSession.expires_at : null);
+                Long showEnd = e != null ? e : endMs;
+                String remainStr = remainingString(showEnd);
+                if (pendingSession != null && pendingCode != null) {
+                    tvSessionInfo.setText(getString(R.string.session_info, safe(pendingSession.course_name), remainStr, pendingCode));
+                }
                 if (remain > 0) countdownHandler.postDelayed(this, 1000);
             }
         };
@@ -534,7 +571,7 @@ public class MainActivity extends AppCompatActivity implements AMapLocationListe
                         Toast.makeText(this, getString(R.string.please_complete_fields), Toast.LENGTH_SHORT).show();
                         return;
                     }
-                    int finalExpected = !selectedUserIds.isEmpty() ? selectedUserIds.size() : expected;
+                    int finalExpected = expected > 0 ? expected : (!selectedUserIds.isEmpty() ? selectedUserIds.size() : 0);
                     createSession(name, finalExpected, minutes);
                 })
                 .setNegativeButton(getString(R.string.cancel), null)
@@ -587,10 +624,6 @@ public class MainActivity extends AppCompatActivity implements AMapLocationListe
                 .thenCompose(code -> {
                     runOnUiThread(() -> {
                         Toast.makeText(this, getString(R.string.code_generated, code), Toast.LENGTH_LONG).show();
-                        tvSessionInfo.setText(getString(R.string.session_info, name, remainingString(end), code));
-                        setFenceOnMap(lat, lon, radius);
-                        startCountdown(end);
-                        startStatsPolling(code);
                         pendingCode = code;
                         SessionInfo s = new SessionInfo();
                         s.sign_in_code = code;
@@ -606,14 +639,18 @@ public class MainActivity extends AppCompatActivity implements AMapLocationListe
                         loc.radius_m = radius;
                         s.location_data = loc;
                         pendingSession = s;
+                        android.content.Intent intent = new android.content.Intent(MainActivity.this, MonitorActivity.class);
+                        intent.putExtra("code", code);
+                        intent.putExtra("courseName", name);
+                        intent.putExtra("expires_at", s.expires_at);
+                        intent.putStringArrayListExtra("selectedUserIds", new java.util.ArrayList<>(selectedUserIds));
+                        startActivity(intent);
                     });
                     return SupabaseClient.getInstance().createAttendSession(code, name, !selectedUserIds.isEmpty() ? selectedUserIds.size() : expected, minutes, lat, lon, radius);
                 })
                 .thenAccept(serverCode -> runOnUiThread(() -> {
                     if (serverCode != null && !serverCode.equals(pendingCode)) {
                         pendingCode = serverCode;
-                        tvSessionInfo.setText(getString(R.string.session_info, name, remainingString(end), serverCode));
-                        startStatsPolling(serverCode);
                     }
                 }))
                 .exceptionally(t -> {
@@ -675,13 +712,41 @@ public class MainActivity extends AppCompatActivity implements AMapLocationListe
     private void loadSessionStats(String code) {
         SupabaseClient.getInstance().fetchSessionStats(code)
                 .thenAccept(stats -> runOnUiThread(() -> {
-                    tvStats.setText(getString(R.string.stats_format, stats.checkedCount, stats.expectedCount));
-                    if (stats.unsignedUsers != null && !stats.unsignedUsers.isEmpty()) {
+                    int expectedTotal = !selectedUserIds.isEmpty() ? selectedUserIds.size() : stats.expectedCount;
+                    tvStats.setText(getString(R.string.stats_format, stats.checkedCount, expectedTotal));
+
+                    java.util.Set<String> checkedIds = new java.util.HashSet<>();
+                    if (stats.checkedUsers != null) {
+                        for (com.example.iattend.data.remote.model.UserProfile u : stats.checkedUsers) {
+                            if (u != null && u.getUserId() != null) checkedIds.add(u.getUserId());
+                        }
+                    }
+
+                    java.util.List<com.example.iattend.data.remote.model.UserProfile> unsigned = new java.util.ArrayList<>();
+                    if (!selectedUserIds.isEmpty()) {
+                        for (String uid : selectedUserIds) {
+                            if (!checkedIds.contains(uid)) {
+                                com.example.iattend.data.remote.model.UserProfile found = null;
+                                if (cachedProfiles != null) {
+                                    for (com.example.iattend.data.remote.model.UserProfile p : cachedProfiles) {
+                                        if (p != null && uid.equals(p.getUserId())) { found = p; break; }
+                                    }
+                                }
+                                if (found == null) {
+                                    found = new com.example.iattend.data.remote.model.UserProfile();
+                                    found.setUserId(uid);
+                                }
+                                unsigned.add(found);
+                            }
+                        }
+                    }
+
+                    if (!unsigned.isEmpty()) {
                         tvNoUnsigned.setVisibility(View.GONE);
                     } else {
                         tvNoUnsigned.setVisibility(View.VISIBLE);
                     }
-                    unsignedAdapter.setItems(stats.unsignedUsers);
+                    unsignedAdapter.setItems(unsigned);
                 }))
                 .exceptionally(t -> { return null; });
     }

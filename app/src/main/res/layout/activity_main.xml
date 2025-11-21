@@ -113,7 +113,8 @@
             android:layout_height="wrap_content"
             android:layout_marginTop="8dp"
             android:gravity="center"
-            android:textSize="14sp" />
+            android:textSize="14sp"
+            android:visibility="gone" />
 
         <TextView
             android:id="@+id/tvStats"
@@ -121,7 +122,8 @@
             android:layout_height="wrap_content"
             android:layout_marginTop="4dp"
             android:gravity="center"
-            android:textSize="14sp" />
+            android:textSize="14sp"
+            android:visibility="gone" />
 
         <TextView
             android:id="@+id/tvUnsignedTitle"
@@ -131,7 +133,8 @@
             android:layout_marginTop="4dp"
             android:gravity="center"
             android:textStyle="bold"
-            android:textSize="14sp" />
+            android:textSize="14sp"
+            android:visibility="gone" />
 
         <TextView
             android:id="@+id/tvNoUnsigned"
@@ -146,7 +149,8 @@
             android:id="@+id/rvUnsigned"
             android:layout_width="match_parent"
             android:layout_height="160dp"
-            android:layout_marginTop="4dp" />
+            android:layout_marginTop="4dp"
+            android:visibility="gone" />
 
     </FrameLayout>
 

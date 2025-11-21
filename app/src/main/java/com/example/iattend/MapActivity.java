@@ -11,6 +11,8 @@ import android.widget.TextView;
 import android.widget.Toast;
 
 import androidx.appcompat.app.AppCompatActivity;
+import androidx.core.app.ActivityCompat;
+import androidx.core.content.ContextCompat;
 
 import com.amap.api.location.AMapLocation;
 import com.amap.api.location.AMapLocationClient;
@@ -49,6 +51,7 @@ public class MapActivity extends AppCompatActivity implements AMapLocationListen
     private boolean isSign = false;
     private OkHttpClient httpClient;
     private final Gson gson = new Gson();
+    private static final int REQ_LOC = 2002;
 
     public static void start(Context context, double lat, double lon, double radius) {
         Intent intent = new Intent(context, MapActivity.class);
@@ -81,7 +84,11 @@ public class MapActivity extends AppCompatActivity implements AMapLocationListen
         initView();
         mapView.onCreate(savedInstanceState);
         initMap();
-        startLocation();
+        if (hasLocationPermission()) {
+            startLocation();
+        } else {
+            requestLocationPermission();
+        }
         startCountDown();
     }
 
@@ -123,6 +130,28 @@ public class MapActivity extends AppCompatActivity implements AMapLocationListen
             locationClient.startLocation();
         } catch (Exception e) {
             e.printStackTrace();
+        }
+    }
+
+    private boolean hasLocationPermission() {
+        return ContextCompat.checkSelfPermission(this, android.Manifest.permission.ACCESS_FINE_LOCATION) == android.content.pm.PackageManager.PERMISSION_GRANTED
+                || ContextCompat.checkSelfPermission(this, android.Manifest.permission.ACCESS_COARSE_LOCATION) == android.content.pm.PackageManager.PERMISSION_GRANTED;
+    }
+
+    private void requestLocationPermission() {
+        ActivityCompat.requestPermissions(this, new String[]{android.Manifest.permission.ACCESS_FINE_LOCATION, android.Manifest.permission.ACCESS_COARSE_LOCATION}, REQ_LOC);
+    }
+
+    @Override
+    public void onRequestPermissionsResult(int requestCode, String[] permissions, int[] grantResults) {
+        super.onRequestPermissionsResult(requestCode, permissions, grantResults);
+        if (requestCode == REQ_LOC) {
+            boolean granted = grantResults.length > 0 && grantResults[0] == android.content.pm.PackageManager.PERMISSION_GRANTED;
+            if (granted) {
+                startLocation();
+            } else {
+                Toast.makeText(this, getString(R.string.unable_get_location), Toast.LENGTH_SHORT).show();
+            }
         }
     }
 
