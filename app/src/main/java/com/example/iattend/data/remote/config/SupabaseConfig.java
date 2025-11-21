@@ -17,7 +17,7 @@ public class SupabaseConfig {
 
     // 表名
     public static final String PROFILES_TABLE = "profiles";
-    public static final String SESSIONS_TABLE = "attend_sessions";
+    public static final String SESSIONS_TABLE = "sign_in_sessions";
     public static final String CHECKINS_TABLE = "attend_checkins";
 
     // 认证端点

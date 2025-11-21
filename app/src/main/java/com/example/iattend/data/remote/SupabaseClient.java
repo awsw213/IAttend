@@ -1,24 +1,26 @@
 package com.example.iattend.data.remote;
 
+import android.util.Log;
+
 import com.example.iattend.data.remote.config.SupabaseConfig;
 import com.example.iattend.data.remote.model.AuthResponse;
-import com.example.iattend.data.remote.model.LoginRequest;
 import com.example.iattend.data.remote.model.SignUpRequest;
 import com.example.iattend.data.remote.model.UserProfile;
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
-
-import okhttp3.MediaType;
-import okhttp3.OkHttpClient;
-import okhttp3.Request;
-import okhttp3.RequestBody;
-import okhttp3.Response;
 
 import java.io.IOException;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeUnit;
+
+import okhttp3.MediaType;
+import okhttp3.OkHttpClient;
+import okhttp3.Request;
+import okhttp3.RequestBody;
+import okhttp3.Response;
+import okhttp3.logging.HttpLoggingInterceptor;
 
 /**
  * Supabase API客户端
@@ -34,7 +36,12 @@ public class SupabaseClient {
 
     private SupabaseClient() {
         // 配置HTTP客户端
+        HttpLoggingInterceptor logging = new HttpLoggingInterceptor(s -> {
+            Log.d("HTTP", s);
+        });
+        logging.setLevel(HttpLoggingInterceptor.Level.BODY);
         this.httpClient = new OkHttpClient.Builder()
+                .addNetworkInterceptor(logging)
                 .connectTimeout(30, TimeUnit.SECONDS)
                 .readTimeout(30, TimeUnit.SECONDS)
                 .writeTimeout(30, TimeUnit.SECONDS)

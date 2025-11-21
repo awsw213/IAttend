@@ -43,8 +43,13 @@ dependencies {
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.lifecycle.runtime.ktx)
 
+    implementation("com.github.getActivity:DeviceCompat:1.0")
+    implementation("com.github.getActivity:XXPermissions:26.5")
+    implementation("com.amap.api:3dmap-location-search:latest.integration")
+//    implementation("com.google.android.gms:play-services-maps:17.0.0")
 
     // HTTP client for Supabase
+    implementation("com.squareup.okhttp3:logging-interceptor:4.12.0")
     implementation("com.squareup.okhttp3:okhttp:4.12.0")
 
     // JSON parsing
@@ -57,6 +62,8 @@ dependencies {
     implementation("com.google.android.material:material:1.12.0")
     implementation("androidx.appcompat:appcompat:1.7.0")
     implementation("androidx.recyclerview:recyclerview:1.3.2")
+    implementation(libs.androidx.activity)
+    implementation(libs.androidx.constraintlayout)
 
     testImplementation(libs.junit)
     androidTestImplementation(libs.androidx.junit)

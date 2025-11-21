@@ -8,11 +8,15 @@ import android.widget.CheckBox;
 import android.widget.EditText;
 import android.widget.TextView;
 import android.widget.Toast;
+
 import androidx.appcompat.app.AppCompatActivity;
+
+import com.amap.api.maps.MapsInitializer;
 import com.example.iattend.backend.AuthService;
 import com.example.iattend.data.remote.SupabaseClient;
 import com.example.iattend.domain.model.AuthResult;
 import com.example.iattend.domain.model.User;
+
 import java.util.concurrent.CompletableFuture;
 
 public class LoginActivity extends AppCompatActivity {
@@ -27,6 +31,9 @@ public class LoginActivity extends AppCompatActivity {
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_login);
+
+        MapsInitializer.updatePrivacyShow(this, true, true);
+        MapsInitializer.updatePrivacyAgree(this, true);
 
         initViews();
         authService = new AuthService();
