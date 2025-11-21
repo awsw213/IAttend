@@ -1,0 +1,10 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(dir:*)",
+      "Bash(findstr \"dialog_edit\")"
+    ],
+    "deny": [],
+    "ask": []
+  }
+}
