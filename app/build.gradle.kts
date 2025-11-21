@@ -42,6 +42,13 @@ dependencies {
 
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.lifecycle.runtime.ktx)
+
+    // 高德地图 SDK
+    implementation("com.amap.api:3dmap-location-search:latest.integration")
+    // 权限管理库
+    implementation("com.github.getActivity:XXPermissions:26.5")
+    implementation("com.github.getActivity:DeviceCompat:1.0")
+
     implementation(libs.androidx.activity.compose)
     implementation(platform(libs.androidx.compose.bom))
     implementation(libs.androidx.compose.ui)
