@@ -266,38 +266,7 @@ public class SupabaseClient {
         return currentToken;
     }
 
-    public CompletableFuture<Boolean> submitQuickCheckIn(long checkedAtMs) {
-        return CompletableFuture.supplyAsync(() -> {
-            if (currentToken == null || currentUser == null) {
-                throw new RuntimeException("用户未登录");
-            }
-            try {
-                Map<String, Object> data = new HashMap<>();
-                data.put("user_id", currentUser.getId());
-                data.put("checked_at_ms", checkedAtMs);
-                String jsonBody = gson.toJson(data);
-                RequestBody body = RequestBody.create(jsonBody, MediaType.get("application/json"));
-                Request request = new Request.Builder()
-                        .url(SupabaseConfig.REST_BASE_URL + "/" + SupabaseConfig.CHECKINS_TABLE)
-                        .addHeader("apikey", SupabaseConfig.SUPABASE_KEY)
-                        .addHeader("Authorization", "Bearer " + currentToken)
-                        .addHeader("Content-Type", "application/json")
-                        .addHeader("Prefer", "return=minimal")
-                        .post(body)
-                        .build();
-                try (Response response = httpClient.newCall(request).execute()) {
-                    if (response.isSuccessful()) {
-                        return true;
-                    } else {
-                        String responseBody = response.body() != null ? response.body().string() : "";
-                        throw new IOException("签到上报失败: " + response.message() + " - " + responseBody);
-                    }
-                }
-            } catch (Exception e) {
-                throw new RuntimeException("签到上报请求失败", e);
-            }
-        });
-    }
+    // removed: submitQuickCheckIn; replaced by structured logging in submitCheckIn
 
     public CompletableFuture<Boolean> isEmailRegistered(String email) {
         return CompletableFuture.supplyAsync(() -> {
@@ -306,6 +275,7 @@ public class SupabaseClient {
                 Request request = new Request.Builder()
                         .url(url)
                         .addHeader("apikey", SupabaseConfig.SUPABASE_KEY)
+                        .addHeader("Authorization", "Bearer " + SupabaseConfig.SUPABASE_KEY)
                         .addHeader("Accept", "application/json")
                         .get()
                         .build();
@@ -353,29 +323,66 @@ public class SupabaseClient {
                 throw new RuntimeException("用户未登录");
             }
             try {
-                Map<String, Object> data = new HashMap<>();
-                data.put("user_id", currentUser.getId());
-                data.put("session_code", sessionCode);
-                data.put("lat", lat);
-                data.put("lon", lon);
-                data.put("distance_m", distanceMeters);
-                data.put("checked_at_ms", checkedAtMs);
-                String jsonBody = gson.toJson(data);
-                RequestBody body = RequestBody.create(jsonBody, MediaType.get("application/json"));
-                Request request = new Request.Builder()
-                        .url(SupabaseConfig.REST_BASE_URL + "/" + SupabaseConfig.CHECKINS_TABLE)
+                String sessUrl = SupabaseConfig.REST_BASE_URL + "/" + SupabaseConfig.SESSIONS_TABLE + "?sign_in_code=eq." + sessionCode + "&select=id&limit=1";
+                Request reqSess = new Request.Builder().url(sessUrl).addHeader("apikey", SupabaseConfig.SUPABASE_KEY).addHeader("Authorization", "Bearer " + currentToken).addHeader("Accept", "application/json").get().build();
+                String sessionId = null;
+                try (Response resp = httpClient.newCall(reqSess).execute()) {
+                    String b = resp.body() != null ? resp.body().string() : "";
+                    if (resp.isSuccessful()) {
+                        SessionRow[] rows = gson.fromJson(b, SessionRow[].class);
+                        if (rows != null && rows.length > 0) sessionId = rows[0].id;
+                    }
+                }
+
+                java.text.SimpleDateFormat fmt = new java.text.SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss'Z'", java.util.Locale.US);
+                fmt.setTimeZone(java.util.TimeZone.getTimeZone("UTC"));
+                String ts = fmt.format(new java.util.Date(checkedAtMs));
+
+                Map<String, Object> logData = new HashMap<>();
+                logData.put("user_id", currentUser.getId());
+                if (sessionId != null) logData.put("session_id", sessionId); else logData.put("session_code", sessionCode);
+                logData.put("attempted_at", ts);
+                logData.put("status", "success");
+                logData.put("latitude", lat);
+                logData.put("longitude", lon);
+                logData.put("distance_m", distanceMeters);
+                String jsonLog = gson.toJson(logData);
+                RequestBody bodyLog = RequestBody.create(jsonLog, MediaType.get("application/json"));
+                Request reqLog = new Request.Builder()
+                        .url(SupabaseConfig.REST_BASE_URL + "/" + SupabaseConfig.SIGN_IN_LOGS_TABLE)
                         .addHeader("apikey", SupabaseConfig.SUPABASE_KEY)
                         .addHeader("Authorization", "Bearer " + currentToken)
                         .addHeader("Content-Type", "application/json")
                         .addHeader("Prefer", "return=minimal")
-                        .post(body)
+                        .post(bodyLog)
                         .build();
-                try (Response response = httpClient.newCall(request).execute()) {
-                    if (response.isSuccessful()) {
+                try (Response r1 = httpClient.newCall(reqLog).execute()) {
+                    if (!r1.isSuccessful()) {
+                        String rb = r1.body() != null ? r1.body().string() : "";
+                        throw new IOException("签到日志写入失败: " + r1.message() + " - " + rb);
+                    }
+                }
+
+                Map<String, Object> recData = new HashMap<>();
+                recData.put("user_id", currentUser.getId());
+                if (sessionId != null) recData.put("session_id", sessionId); else recData.put("session_code", sessionCode);
+                recData.put("signed_at", ts);
+                String jsonRec = gson.toJson(recData);
+                RequestBody bodyRec = RequestBody.create(jsonRec, MediaType.get("application/json"));
+                Request reqRec = new Request.Builder()
+                        .url(SupabaseConfig.REST_BASE_URL + "/" + SupabaseConfig.SIGN_IN_RECORDS_TABLE)
+                        .addHeader("apikey", SupabaseConfig.SUPABASE_KEY)
+                        .addHeader("Authorization", "Bearer " + currentToken)
+                        .addHeader("Content-Type", "application/json")
+                        .addHeader("Prefer", "return=minimal")
+                        .post(bodyRec)
+                        .build();
+                try (Response r2 = httpClient.newCall(reqRec).execute()) {
+                    if (r2.isSuccessful()) {
                         return true;
                     } else {
-                        String responseBody = response.body() != null ? response.body().string() : "";
-                        throw new IOException("签到上报失败: " + response.message() + " - " + responseBody);
+                        String responseBody = r2.body() != null ? r2.body().string() : "";
+                        throw new IOException("签到上报失败: " + r2.message() + " - " + responseBody);
                     }
                 }
             } catch (Exception e) {
@@ -384,8 +391,8 @@ public class SupabaseClient {
         });
     }
 
-    private static class SessionRow { String code; Integer expected_count; String course_name; String[] expected_user_ids; }
-    private static class CheckinRow { String user_id; Long checked_at_ms; }
+    private static class SessionRow { String id; String sign_in_code; Integer expected_count; String course_name; }
+    private static class RecordRow { String user_id; Long signed_at; }
 
     public static class SessionStats {
         public int checkedCount;
@@ -397,10 +404,11 @@ public class SupabaseClient {
     public CompletableFuture<Boolean> isSessionCodeExists(String code) {
         return CompletableFuture.supplyAsync(() -> {
             try {
-                String url = SupabaseConfig.REST_BASE_URL + "/" + SupabaseConfig.SESSIONS_TABLE + "?code=eq." + code + "&select=code&limit=1";
+                String url = SupabaseConfig.REST_BASE_URL + "/" + SupabaseConfig.SESSIONS_TABLE + "?sign_in_code=eq." + code + "&select=sign_in_code&limit=1";
                 Request request = new Request.Builder()
                         .url(url)
                         .addHeader("apikey", SupabaseConfig.SUPABASE_KEY)
+                        .addHeader("Authorization", "Bearer " + SupabaseConfig.SUPABASE_KEY)
                         .addHeader("Accept", "application/json")
                         .get()
                         .build();
@@ -419,22 +427,30 @@ public class SupabaseClient {
         });
     }
 
-    public CompletableFuture<String> createAttendSession(String code, String courseName, int expectedCount, long startMs, long endMs, double centerLat, double centerLon, double radiusM, java.util.List<String> expectedUserIds) {
+    public CompletableFuture<String> createAttendSession(String code, String courseName, int expectedCount, int durationMinutes, double centerLat, double centerLon, double radiusM) {
         return CompletableFuture.supplyAsync(() -> {
             if (currentToken == null || currentUser == null) {
                 throw new RuntimeException("用户未登录");
             }
             try {
+                java.text.SimpleDateFormat fmt = new java.text.SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss'Z'", java.util.Locale.US);
+                fmt.setTimeZone(java.util.TimeZone.getTimeZone("UTC"));
+                long nowMs = System.currentTimeMillis();
+                String createdAt = fmt.format(new java.util.Date(nowMs));
+                String expiresAt = fmt.format(new java.util.Date(nowMs + Math.max(1, durationMinutes) * 60_000L));
                 Map<String, Object> data = new HashMap<>();
-                data.put("code", code);
+                data.put("sign_in_code", code);
                 data.put("course_name", courseName);
                 data.put("expected_count", expectedCount);
-                data.put("start_ms", startMs);
-                data.put("end_ms", endMs);
-                data.put("center_lat", centerLat);
-                data.put("center_lon", centerLon);
-                data.put("radius_m", radiusM);
-                data.put("expected_user_ids", expectedUserIds);
+                data.put("created_by", currentUser.getId());
+                data.put("duration_minutes", durationMinutes);
+                data.put("created_at", createdAt);
+                data.put("expires_at", expiresAt);
+                Map<String, Object> loc = new HashMap<>();
+                loc.put("lat", centerLat);
+                loc.put("lon", centerLon);
+                loc.put("radius_m", radiusM);
+                data.put("location_data", loc);
                 String jsonBody = gson.toJson(data);
                 RequestBody body = RequestBody.create(jsonBody, MediaType.get("application/json"));
                 Request request = new Request.Builder()
@@ -449,7 +465,7 @@ public class SupabaseClient {
                     String responseBody = response.body() != null ? response.body().string() : "";
                     if (response.isSuccessful()) {
                         SessionRow[] rows = gson.fromJson(responseBody, SessionRow[].class);
-                        return rows != null && rows.length > 0 ? rows[0].code : code;
+                        return rows != null && rows.length > 0 ? rows[0].sign_in_code : code;
                     } else {
                         throw new IOException("创建签到失败: " + response.message() + " - " + responseBody);
                     }
@@ -463,9 +479,9 @@ public class SupabaseClient {
     public CompletableFuture<SessionStats> fetchSessionStats(String sessionCode) {
         return CompletableFuture.supplyAsync(() -> {
             int expected = 0;
-            java.util.List<String> expectedIds = new java.util.ArrayList<>();
+            String sessionId = null;
             try {
-                String urlSess = SupabaseConfig.REST_BASE_URL + "/" + SupabaseConfig.SESSIONS_TABLE + "?code=eq." + sessionCode + "&select=expected_count,expected_user_ids&limit=1";
+                String urlSess = SupabaseConfig.REST_BASE_URL + "/" + SupabaseConfig.SESSIONS_TABLE + "?sign_in_code=eq." + sessionCode + "&select=id,expected_count&limit=1";
                 Request request = new Request.Builder()
                         .url(urlSess)
                         .addHeader("apikey", SupabaseConfig.SUPABASE_KEY)
@@ -477,10 +493,8 @@ public class SupabaseClient {
                     if (resp.isSuccessful()) {
                         SessionRow[] rows = gson.fromJson(b, SessionRow[].class);
                         if (rows != null && rows.length > 0) {
+                            sessionId = rows[0].id;
                             if (rows[0].expected_count != null) expected = rows[0].expected_count;
-                            if (rows[0].expected_user_ids != null) {
-                                expectedIds.addAll(java.util.Arrays.asList(rows[0].expected_user_ids));
-                            }
                         }
                     }
                 }
@@ -488,7 +502,12 @@ public class SupabaseClient {
 
             java.util.List<String> ids = new java.util.ArrayList<>();
             try {
-                String urlChk = SupabaseConfig.REST_BASE_URL + "/" + SupabaseConfig.CHECKINS_TABLE + "?session_code=eq." + sessionCode + "&select=user_id,checked_at_ms";
+                String urlChk;
+                if (sessionId != null && !sessionId.isEmpty()) {
+                    urlChk = SupabaseConfig.REST_BASE_URL + "/" + SupabaseConfig.SIGN_IN_RECORDS_TABLE + "?session_id=eq." + sessionId + "&select=user_id,signed_at";
+                } else {
+                    urlChk = SupabaseConfig.REST_BASE_URL + "/" + SupabaseConfig.SIGN_IN_RECORDS_TABLE + "?session_code=eq." + sessionCode + "&select=user_id,signed_at";
+                }
                 Request request = new Request.Builder()
                         .url(urlChk)
                         .addHeader("apikey", SupabaseConfig.SUPABASE_KEY)
@@ -498,9 +517,9 @@ public class SupabaseClient {
                 try (Response resp = httpClient.newCall(request).execute()) {
                     String b = resp.body() != null ? resp.body().string() : "";
                     if (resp.isSuccessful()) {
-                        CheckinRow[] rows = gson.fromJson(b, CheckinRow[].class);
+                        RecordRow[] rows = gson.fromJson(b, RecordRow[].class);
                         if (rows != null) {
-                            for (CheckinRow r : rows) if (r != null && r.user_id != null) ids.add(r.user_id);
+                            for (RecordRow r : rows) if (r != null && r.user_id != null) ids.add(r.user_id);
                         }
                     }
                 }
@@ -523,28 +542,11 @@ public class SupabaseClient {
                 } catch (Exception ignored) {}
             }
 
-            java.util.List<String> unsignedIds = new java.util.ArrayList<>();
-            for (String id : expectedIds) if (!ids.contains(id)) unsignedIds.add(id);
             java.util.List<UserProfile> unsigned = new java.util.ArrayList<>();
-            if (!unsignedIds.isEmpty()) {
-                StringBuilder in2 = new StringBuilder();
-                for (int i = 0; i < unsignedIds.size(); i++) { if (i > 0) in2.append(","); in2.append(unsignedIds.get(i)); }
-                try {
-                    String urlU = SupabaseConfig.REST_BASE_URL + "/" + SupabaseConfig.PROFILES_TABLE + "?user_id=in.(" + in2 + ")&select=user_id,name,email";
-                    Request request = new Request.Builder().url(urlU).addHeader("apikey", SupabaseConfig.SUPABASE_KEY).addHeader("Accept", "application/json").get().build();
-                    try (Response resp = httpClient.newCall(request).execute()) {
-                        String b = resp.body() != null ? resp.body().string() : "";
-                        if (resp.isSuccessful()) {
-                            UserProfile[] rows = gson.fromJson(b, UserProfile[].class);
-                            if (rows != null) for (UserProfile u : rows) if (u != null) unsigned.add(u);
-                        }
-                    }
-                } catch (Exception ignored) {}
-            }
 
             SessionStats stats = new SessionStats();
             stats.checkedCount = ids.size();
-            stats.expectedCount = !expectedIds.isEmpty() ? expectedIds.size() : (expected > 0 ? expected : ids.size());
+            stats.expectedCount = expected > 0 ? expected : ids.size();
             stats.checkedUsers = checked;
             stats.unsignedUsers = unsigned;
             return stats;

@@ -74,7 +74,7 @@ public class MapActivity extends AppCompatActivity implements AMapLocationListen
                 .writeTimeout(30, TimeUnit.SECONDS)
                 .build();
 
-        setContentView(R.layout.activity_main);
+        setContentView(R.layout.activity_map);
         lat = getIntent().getDoubleExtra("lat", 0);
         lon = getIntent().getDoubleExtra("lon", 0);
         radius = getIntent().getDoubleExtra("radius", 0);
@@ -87,7 +87,8 @@ public class MapActivity extends AppCompatActivity implements AMapLocationListen
 
     private void initView() {
         mapView = findViewById(R.id.mapView);
-        btnSignIn = findViewById(R.id.mapView);
+        btnSignIn = findViewById(R.id.btnSignIn);
+        tvTimer = findViewById(R.id.tvTimer);
         btnSignIn.setOnClickListener(v -> signIn());
     }
 

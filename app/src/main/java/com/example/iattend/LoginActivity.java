@@ -180,22 +180,7 @@ public class LoginActivity extends AppCompatActivity {
             return;
         }
         if (errorMessage.contains("邮箱或密码错误") || errorMessage.contains("Invalid login credentials")) {
-            SupabaseClient.getInstance().isEmailRegistered(email)
-                    .thenAccept(registered -> runOnUiThread(() -> {
-                        if (registered) {
-                            showToast(getString(R.string.password_error));
-                        } else {
-                            showToast(getString(R.string.account_not_registered));
-                        }
-                    }))
-                    .exceptionally(t -> {
-                        runOnUiThread(() -> showToast(getString(R.string.email_password_error)));
-                        return null;
-                    });
-            return;
-        }
-        if (errorMessage.contains("User already registered")) {
-            showToast(getString(R.string.account_not_registered));
+            showToast(getString(R.string.email_password_error));
             return;
         }
         showToast(errorMessage);

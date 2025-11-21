@@ -197,20 +197,25 @@ public class MainActivity extends AppCompatActivity implements AMapLocationListe
                 return;
             }
             long now = System.currentTimeMillis();
-            if (session.end_ms != null && now > session.end_ms) {
+            Long endMs = parseIsoToMillis(session.expires_at);
+            if (endMs != null && now > endMs) {
                 Toast.makeText(this, getString(R.string.code_expired), Toast.LENGTH_SHORT).show();
                 return;
             }
-            if (session.start_ms != null && now < session.start_ms) {
+            Long startMs = parseIsoToMillis(session.created_at);
+            if (startMs != null && now < startMs) {
                 Toast.makeText(this, getString(R.string.out_of_time), Toast.LENGTH_SHORT).show();
                 return;
             }
             pendingCode = code;
             pendingSession = session;
-            tvSessionInfo.setText(getString(R.string.session_info, safe(session.course_name), remainingString(session.end_ms), code));
-            setFenceOnMap(session.center_lat, session.center_lon, session.radius_m);
+            tvSessionInfo.setText(getString(R.string.session_info, safe(session.course_name), remainingString(endMs), code));
+            double cLat = session.location_data != null && session.location_data.lat != null ? session.location_data.lat : session.center_lat;
+            double cLon = session.location_data != null && session.location_data.lon != null ? session.location_data.lon : session.center_lon;
+            double rad = session.location_data != null && session.location_data.radius_m != null ? session.location_data.radius_m : (session.radius_m != null ? session.radius_m : 0.0);
+            setFenceOnMap(cLat, cLon, rad);
             ensureLocationPermission();
-            startCountdown(session.end_ms);
+            startCountdown(endMs);
             startStatsPolling(code);
         })).exceptionally(t -> {
             runOnUiThread(() -> Toast.makeText(this, getString(R.string.network_failed), Toast.LENGTH_SHORT).show());
@@ -250,18 +255,22 @@ public class MainActivity extends AppCompatActivity implements AMapLocationListe
             Toast.makeText(this, getString(R.string.enable_gps_retry), Toast.LENGTH_SHORT).show();
             return;
         }
-        double d = distanceMeters(lastLocation.getLatitude(), lastLocation.getLongitude(), pendingSession.center_lat, pendingSession.center_lon);
-        double radius = pendingSession.radius_m != null ? pendingSession.radius_m : 0.0;
+        double cLat = pendingSession.location_data != null && pendingSession.location_data.lat != null ? pendingSession.location_data.lat : pendingSession.center_lat;
+        double cLon = pendingSession.location_data != null && pendingSession.location_data.lon != null ? pendingSession.location_data.lon : pendingSession.center_lon;
+        double radius = pendingSession.location_data != null && pendingSession.location_data.radius_m != null ? pendingSession.location_data.radius_m : (pendingSession.radius_m != null ? pendingSession.radius_m : 0.0);
+        double d = distanceMeters(lastLocation.getLatitude(), lastLocation.getLongitude(), cLat, cLon);
         long now = System.currentTimeMillis();
         if (radius > 0 && d > radius) {
             Toast.makeText(this, getString(R.string.out_of_range), Toast.LENGTH_SHORT).show();
             return;
         }
-        if (pendingSession.end_ms != null && now > pendingSession.end_ms) {
+        Long endMs2 = parseIsoToMillis(pendingSession.expires_at);
+        if (endMs2 != null && now > endMs2) {
             Toast.makeText(this, getString(R.string.session_finished), Toast.LENGTH_SHORT).show();
             return;
         }
-        if (pendingSession.start_ms != null && now < pendingSession.start_ms) {
+        Long startMs2 = parseIsoToMillis(pendingSession.created_at);
+        if (startMs2 != null && now < startMs2) {
             Toast.makeText(this, getString(R.string.out_of_time), Toast.LENGTH_SHORT).show();
             return;
         }
@@ -408,7 +417,11 @@ public class MainActivity extends AppCompatActivity implements AMapLocationListe
             String url = SupabaseConfig.REST_BASE_URL + "/" + SupabaseConfig.SESSIONS_TABLE + "?sign_in_code=eq." + code + "&limit=1";
             Request.Builder builder = new Request.Builder().url(url).addHeader("apikey", SupabaseConfig.SUPABASE_KEY).addHeader("Accept", "application/json");
             String token = SupabaseClient.getInstance().getCurrentToken();
-            if (token != null) builder.addHeader("Authorization", "Bearer " + token);
+            if (token != null) {
+                builder.addHeader("Authorization", "Bearer " + token);
+            } else {
+                builder.addHeader("Authorization", "Bearer " + SupabaseConfig.SUPABASE_KEY);
+            }
             Request request = builder.get().build();
             try (Response response = httpClient.newCall(request).execute()) {
                 String body = response.body() != null ? response.body().string() : "";
@@ -446,8 +459,11 @@ public class MainActivity extends AppCompatActivity implements AMapLocationListe
                     isFirstLoc = false;
                 }
                 if (pendingSession != null && tvSessionInfo != null) {
-                    double d = distanceMeters(amapLocation.getLatitude(), amapLocation.getLongitude(), pendingSession.center_lat, pendingSession.center_lon);
-                    tvSessionInfo.setText(getString(R.string.session_info_with_distance, safe(pendingSession.course_name), remainingString(pendingSession.end_ms), pendingCode, (int) d));
+                    double cLat = pendingSession.location_data != null && pendingSession.location_data.lat != null ? pendingSession.location_data.lat : pendingSession.center_lat;
+                    double cLon = pendingSession.location_data != null && pendingSession.location_data.lon != null ? pendingSession.location_data.lon : pendingSession.center_lon;
+                    Long endMs = parseIsoToMillis(pendingSession.expires_at);
+                    double d = distanceMeters(amapLocation.getLatitude(), amapLocation.getLongitude(), cLat, cLon);
+                    tvSessionInfo.setText(getString(R.string.session_info_with_distance, safe(pendingSession.course_name), remainingString(endMs), pendingCode, (int) d));
                 }
                 // 记录当前定位的坐标
                 mCurrentLatLng = new LatLng(amapLocation.getLatitude(), amapLocation.getLongitude());
@@ -512,7 +528,7 @@ public class MainActivity extends AppCompatActivity implements AMapLocationListe
                     try { expected = Integer.parseInt(countStr); } catch (Exception ignored) {}
                     int minutes = 5;
                     try { minutes = Integer.parseInt(minStr); } catch (Exception ignored) {}
-                    if (minutes < 1) minutes = 5;
+                    if (minutes < 1) minutes = 1;
                     if (minutes > 30) minutes = 30;
                     if (name.isEmpty() || (expected <= 0 && selectedUserIds.isEmpty())) {
                         Toast.makeText(this, getString(R.string.please_complete_fields), Toast.LENGTH_SHORT).show();
@@ -568,13 +584,37 @@ public class MainActivity extends AppCompatActivity implements AMapLocationListe
         long end = now + minutes * 60_000L;
         double radius = 100.0;
         CompletableFuture.supplyAsync(this::generateUniqueCodeBlocking)
-                .thenCompose(sign_in_code -> SupabaseClient.getInstance().createAttendSession(sign_in_code, name, !selectedUserIds.isEmpty() ? selectedUserIds.size() : expected, now, end, lat, lon, radius, selectedUserIds))
-                .thenAccept(sign_in_code -> runOnUiThread(() -> {
-                    Toast.makeText(this, getString(R.string.code_generated, sign_in_code), Toast.LENGTH_LONG).show();
-                    tvSessionInfo.setText(getString(R.string.session_info, name, remainingString(end), sign_in_code));
-                    setFenceOnMap(lat, lon, radius);
-                    startCountdown(end);
-                    startStatsPolling(sign_in_code);
+                .thenCompose(code -> {
+                    runOnUiThread(() -> {
+                        Toast.makeText(this, getString(R.string.code_generated, code), Toast.LENGTH_LONG).show();
+                        tvSessionInfo.setText(getString(R.string.session_info, name, remainingString(end), code));
+                        setFenceOnMap(lat, lon, radius);
+                        startCountdown(end);
+                        startStatsPolling(code);
+                        pendingCode = code;
+                        SessionInfo s = new SessionInfo();
+                        s.sign_in_code = code;
+                        s.course_name = name;
+                        s.duration_minutes = minutes;
+                        java.text.SimpleDateFormat fmt = new java.text.SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss'Z'", java.util.Locale.US);
+                        fmt.setTimeZone(java.util.TimeZone.getTimeZone("UTC"));
+                        s.created_at = fmt.format(new java.util.Date(now));
+                        s.expires_at = fmt.format(new java.util.Date(end));
+                        LocationData loc = new LocationData();
+                        loc.lat = lat;
+                        loc.lon = lon;
+                        loc.radius_m = radius;
+                        s.location_data = loc;
+                        pendingSession = s;
+                    });
+                    return SupabaseClient.getInstance().createAttendSession(code, name, !selectedUserIds.isEmpty() ? selectedUserIds.size() : expected, minutes, lat, lon, radius);
+                })
+                .thenAccept(serverCode -> runOnUiThread(() -> {
+                    if (serverCode != null && !serverCode.equals(pendingCode)) {
+                        pendingCode = serverCode;
+                        tvSessionInfo.setText(getString(R.string.session_info, name, remainingString(end), serverCode));
+                        startStatsPolling(serverCode);
+                    }
                 }))
                 .exceptionally(t -> {
                     runOnUiThread(() -> Toast.makeText(this, getString(R.string.check_in_report_failed), Toast.LENGTH_SHORT).show());
@@ -596,12 +636,29 @@ public class MainActivity extends AppCompatActivity implements AMapLocationListe
 
     private static class SessionInfo {
         public String sign_in_code;
+        public String course_name;
+        public Integer duration_minutes;
+        public String created_at;
+        public String expires_at;
         public Double center_lat;
         public Double center_lon;
         public Double radius_m;
-        public Long start_ms;
-        public Long end_ms;
-        public String course_name;
+        public LocationData location_data;
+    }
+    private static class LocationData { public Double lat; public Double lon; public Double radius_m; }
+
+    private Long parseIsoToMillis(String iso) {
+        if (iso == null || iso.isEmpty()) return null;
+        try {
+            java.time.Instant inst = java.time.Instant.parse(iso);
+            return inst.toEpochMilli();
+        } catch (Exception e) {
+            try {
+                java.text.SimpleDateFormat f = new java.text.SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss'Z'", java.util.Locale.US);
+                f.setTimeZone(java.util.TimeZone.getTimeZone("UTC"));
+                return f.parse(iso).getTime();
+            } catch (Exception ex) { return null; }
+        }
     }
 
     private void startStatsPolling(String sign_in_code) {
