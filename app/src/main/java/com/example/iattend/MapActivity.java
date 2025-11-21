@@ -212,8 +212,12 @@ public class MapActivity extends AppCompatActivity {
                                     if (distance > (float) radius) {
                                         runOnUiThread(() -> Toast.makeText(MapActivity.this, "超出位置，无法签到", Toast.LENGTH_SHORT).show());
                                     } else {
-                                        String user_id = getSharedPreferences("auth", MODE_PRIVATE).getString("user_id", "");
-                                        postCheckin(user_id);
+                                        runOnUiThread(() -> {
+                                            Intent intent = new Intent(MapActivity.this, FaceRecognitionActivity.class);
+                                            intent.putExtra("modelAssetName", "mobile_face_net.tflite");
+                                            startActivity(intent);
+                                            finish();
+                                        });
                                     }
                                 }
                             } else {
