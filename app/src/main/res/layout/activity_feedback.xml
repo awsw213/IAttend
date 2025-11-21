@@ -49,13 +49,47 @@
 
         </com.google.android.material.textfield.TextInputLayout>
 
+        <!-- 截图选择区域 -->
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:layout_marginBottom="24dp">
+
+            <Button
+                android:id="@+id/btnSelectImage"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="Select Screenshot (Optional)"
+                android:textAllCaps="false"
+                android:backgroundTint="@android:color/holo_blue_light"/>
+
+            <ImageView
+                android:id="@+id/ivScreenshot"
+                android:layout_width="match_parent"
+                android:layout_height="200dp"
+                android:layout_marginTop="8dp"
+                android:visibility="gone"
+                android:scaleType="centerCrop"
+                android:background="@drawable/edit_text_border" />
+
+        </LinearLayout>
+
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginBottom="16dp"
+            android:text="* Adding a screenshot can help us better understand your feedback"
+            android:textSize="12sp"
+            android:textColor="#888888" />
+
         <!-- 提交按钮 -->
         <Button
             android:id="@+id/btnSubmit"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:text="Submit Feedback"
-            android:backgroundTint="@color/design_default_color_primary" />
+            android:backgroundTint="@android:color/holo_blue_light"/>
 
         <ProgressBar
             android:id="@+id/progressBar"

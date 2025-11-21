@@ -16,6 +16,11 @@ dependencyResolutionManagement {
     repositories {
         google()
         mavenCentral()
+        // Supabase依赖需要的仓库
+        maven("https://repo1.maven.org/maven2/")
+        maven("https://jitpack.io")
+        // 额外的仓库以确保能找到Supabase
+        maven("https://oss.sonatype.org/content/repositories/snapshots")
     }
 }
 

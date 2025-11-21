@@ -1,7 +1,72 @@
 <?xml version="1.0" encoding="utf-8"?>
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
-    android:orientation="vertical"
     android:layout_width="match_parent"
-    android:layout_height="match_parent">
+    android:layout_height="match_parent"
+    android:orientation="vertical">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:padding="16dp">
+
+        <Button
+            android:id="@+id/btnSignIn"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Sign in"
+            android:paddingHorizontal="24dp"
+            android:paddingVertical="12dp"
+            android:textSize="16sp"/>
+
+        <Button
+            android:id="@+id/btnCreate"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Create"
+            android:paddingHorizontal="24dp"
+            android:paddingVertical="12dp"
+            android:textSize="16sp"/>
+    </LinearLayout>
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_weight="1"/>
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:padding="16dp"
+        android:background="@android:color/darker_gray">
+
+        <Button
+            android:id="@+id/btnHome"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Home"
+            android:paddingHorizontal="16dp"
+            android:paddingVertical="12dp"
+            android:textSize="16sp"/>
+
+        <Button
+            android:id="@+id/btnHistory"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="History"
+            android:paddingHorizontal="16dp"
+            android:paddingVertical="12dp"
+            android:textSize="16sp"/>
+
+        <Button
+            android:id="@+id/btnPersonalCentre"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Personal Centre"
+            android:paddingHorizontal="16dp"
+            android:paddingVertical="12dp"
+            android:textSize="16sp"/>
+    </LinearLayout>
 
 </LinearLayout>

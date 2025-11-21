@@ -2,6 +2,7 @@ plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.android)
     alias(libs.plugins.kotlin.compose)
+    kotlin("plugin.serialization") version "2.0.21"
 }
 
 android {
@@ -10,7 +11,7 @@ android {
 
     defaultConfig {
         applicationId = "com.example.iattend"
-        minSdk = 24
+        minSdk = 26
         targetSdk = 36
         versionCode = 1
         versionName = "1.0"
@@ -50,14 +51,20 @@ dependencies {
     implementation(libs.androidx.compose.ui.tooling.preview)
     implementation(libs.androidx.compose.material3)
 
-    // Supabase Java SDK
-    implementation("io.supabase:supabase-java:1.2.0")
+    // Supabase Kotlin SDK - 按照官方指导
+    implementation(platform("io.github.jan-tennert.supabase:bom:3.1.4"))
+    implementation("io.github.jan-tennert.supabase:postgrest-kt")
+    implementation("io.ktor:ktor-client-android:2.3.12")
 
     // HTTP client for Supabase
     implementation("com.squareup.okhttp3:okhttp:4.12.0")
 
     // JSON parsing
     implementation("com.google.code.gson:gson:2.10.1")
+
+    // Image loading with Glide
+    implementation("com.github.bumptech.glide:glide:4.16.0")
+    annotationProcessor("com.github.bumptech.glide:compiler:4.16.0")
 
     // ViewModel and LiveData
     implementation("androidx.lifecycle:lifecycle-viewmodel:2.7.0")
@@ -66,10 +73,6 @@ dependencies {
     implementation("com.google.android.material:material:1.9.0")
     implementation("androidx.appcompat:appcompat:1.6.1")
     implementation("de.hdodenhof:circleimageview:3.1.0")
-
-    // Network
-    implementation("com.squareup.okhttp3:okhttp:4.11.0")
-    implementation("com.google.code.gson:gson:2.8.9")
 
     testImplementation(libs.junit)
     androidTestImplementation(libs.androidx.junit)
