@@ -7,6 +7,8 @@ import android.os.Bundle;
 import android.os.CountDownTimer;
 import android.util.Log;
 import android.view.View;
+import android.widget.Button;
+import android.widget.RelativeLayout;
 import android.widget.TextView;
 import android.widget.Toast;
 
@@ -14,20 +16,13 @@ import androidx.appcompat.app.AppCompatActivity;
 import androidx.core.app.ActivityCompat;
 import androidx.core.content.ContextCompat;
 
-import com.amap.api.location.AMapLocation;
-import com.amap.api.location.AMapLocationClient;
-import com.amap.api.location.AMapLocationClientOption;
-import com.amap.api.location.AMapLocationListener;
-import com.amap.api.maps.AMap;
-import com.amap.api.maps.AMapUtils;
-import com.amap.api.maps.CameraUpdateFactory;
-import com.amap.api.maps.MapView;
-import com.amap.api.maps.model.BitmapDescriptorFactory;
-import com.amap.api.maps.model.LatLng;
-import com.amap.api.maps.model.Marker;
-import com.amap.api.maps.model.MarkerOptions;
 import com.google.gson.Gson;
 
+import java.lang.reflect.Constructor;
+import java.lang.reflect.Field;
+import java.lang.reflect.InvocationHandler;
+import java.lang.reflect.Method;
+import java.lang.reflect.Proxy;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeUnit;
 
@@ -38,20 +33,21 @@ import okhttp3.RequestBody;
 import okhttp3.Response;
 import okhttp3.logging.HttpLoggingInterceptor;
 
-public class MapActivity extends AppCompatActivity implements AMapLocationListener, AMap.OnMapClickListener {
+public class MapActivity extends AppCompatActivity {
 
-    private MapView mapView;
-    private AMap aMap;
-    private AMapLocationClient locationClient;
+    private View mapView;
+    private Object aMap;
+    private Object locationClient;
     private TextView tvTimer;
     private View btnSignIn;
     private CountDownTimer countDownTimer;
-    private Marker currentLocationMarker;
+    private Object currentLocationMarker;
     private double lat, lon, radius;
     private boolean isSign = false;
     private OkHttpClient httpClient;
     private final Gson gson = new Gson();
     private static final int REQ_LOC = 2002;
+    private boolean amapAvailable;
 
     public static void start(Context context, double lat, double lon, double radius) {
         Intent intent = new Intent(context, MapActivity.class);
@@ -77,19 +73,59 @@ public class MapActivity extends AppCompatActivity implements AMapLocationListen
                 .writeTimeout(30, TimeUnit.SECONDS)
                 .build();
 
-        setContentView(R.layout.activity_map);
         lat = getIntent().getDoubleExtra("lat", 0);
         lon = getIntent().getDoubleExtra("lon", 0);
         radius = getIntent().getDoubleExtra("radius", 0);
-        initView();
-        mapView.onCreate(savedInstanceState);
-        initMap();
-        if (hasLocationPermission()) {
-            startLocation();
-        } else {
-            requestLocationPermission();
+        amapAvailable = isClassPresent("com.amap.api.maps.MapView");
+        if (amapAvailable) {
+            try {
+                Class<?> mi = Class.forName("com.amap.api.maps.MapsInitializer");
+                Method show = mi.getMethod("updatePrivacyShow", android.content.Context.class, boolean.class, boolean.class);
+                Method agree = mi.getMethod("updatePrivacyAgree", android.content.Context.class, boolean.class);
+                show.invoke(null, this, true, true);
+                agree.invoke(null, this, true);
+            } catch (Exception ignored) {}
         }
-        startCountDown();
+        if (amapAvailable) {
+            setContentView(R.layout.activity_map);
+            initView();
+            try {
+                Method mOnCreate = mapView.getClass().getMethod("onCreate", Bundle.class);
+                mOnCreate.invoke(mapView, savedInstanceState);
+            } catch (Exception ignored) {}
+            initMap();
+            if (hasLocationPermission()) {
+                startLocation();
+            } else {
+                requestLocationPermission();
+            }
+            startCountDown();
+        } else {
+            RelativeLayout root = new RelativeLayout(this);
+            root.setLayoutParams(new RelativeLayout.LayoutParams(RelativeLayout.LayoutParams.MATCH_PARENT, RelativeLayout.LayoutParams.MATCH_PARENT));
+            TextView info = new TextView(this);
+            info.setText("地图SDK缺失，无法显示地图与定位");
+            info.setTextSize(16f);
+            RelativeLayout.LayoutParams ip = new RelativeLayout.LayoutParams(RelativeLayout.LayoutParams.WRAP_CONTENT, RelativeLayout.LayoutParams.WRAP_CONTENT);
+            ip.addRule(RelativeLayout.CENTER_IN_PARENT);
+            root.addView(info, ip);
+            Button fallbackBtn = new Button(this);
+            fallbackBtn.setText("签到");
+            fallbackBtn.setEnabled(false);
+            RelativeLayout.LayoutParams bp = new RelativeLayout.LayoutParams(RelativeLayout.LayoutParams.WRAP_CONTENT, RelativeLayout.LayoutParams.WRAP_CONTENT);
+            bp.addRule(RelativeLayout.ALIGN_PARENT_BOTTOM);
+            bp.addRule(RelativeLayout.CENTER_HORIZONTAL);
+            bp.bottomMargin = 48;
+            root.addView(fallbackBtn, bp);
+            tvTimer = new TextView(this);
+            RelativeLayout.LayoutParams tp = new RelativeLayout.LayoutParams(RelativeLayout.LayoutParams.WRAP_CONTENT, RelativeLayout.LayoutParams.WRAP_CONTENT);
+            tp.addRule(RelativeLayout.ALIGN_PARENT_TOP);
+            tp.addRule(RelativeLayout.CENTER_HORIZONTAL);
+            tp.topMargin = 48;
+            root.addView(tvTimer, tp);
+            setContentView(root);
+            startCountDown();
+        }
     }
 
     private void initView() {
@@ -101,35 +137,100 @@ public class MapActivity extends AppCompatActivity implements AMapLocationListen
 
     private void signIn() {
         isSign = true;
-        if (locationClient != null) {
-            locationClient.stopLocation();
-            locationClient.startLocation();
+        if (locationClient != null && amapAvailable) {
+            try {
+                Method stop = locationClient.getClass().getMethod("stopLocation");
+                Method start = locationClient.getClass().getMethod("startLocation");
+                stop.invoke(locationClient);
+                start.invoke(locationClient);
+            } catch (Exception ignored) {}
+        } else if (!amapAvailable) {
+            Toast.makeText(this, "缺少地图定位组件", Toast.LENGTH_SHORT).show();
         }
     }
 
     private void initMap() {
-        if (aMap == null) {
-            aMap = mapView.getMap();
-            aMap.setOnMapClickListener(this);
-            // 设置地图属性
-            aMap.getUiSettings().setZoomControlsEnabled(true);
-            aMap.getUiSettings().setCompassEnabled(true);
-            aMap.getUiSettings().setScaleControlsEnabled(true);
-        }
+        if (!amapAvailable) return;
+        try {
+            Method getMap = mapView.getClass().getMethod("getMap");
+            aMap = getMap.invoke(mapView);
+        } catch (Exception ignored) {}
     }
 
     private void startLocation() {
+        if (!amapAvailable) return;
         try {
-            locationClient = new AMapLocationClient(this);
-            AMapLocationClientOption option = new AMapLocationClientOption();
-            option.setLocationMode(AMapLocationClientOption.AMapLocationMode.Hight_Accuracy);
-            option.setOnceLocation(false);
-            option.setInterval(5000);
-            locationClient.setLocationOption(option);
-            locationClient.setLocationListener(this);
-            locationClient.startLocation();
+            Class<?> clientCls = Class.forName("com.amap.api.location.AMapLocationClient");
+            Constructor<?> cons = clientCls.getConstructor(Context.class);
+            locationClient = cons.newInstance(this);
+            Class<?> optionCls = Class.forName("com.amap.api.location.AMapLocationClientOption");
+            Object option = optionCls.getConstructor().newInstance();
+            Class<?> modeCls = Class.forName("com.amap.api.location.AMapLocationClientOption$AMapLocationMode");
+            Field high = modeCls.getField("Hight_Accuracy");
+            Object mode = high.get(null);
+            Method setMode = optionCls.getMethod("setLocationMode", modeCls);
+            setMode.invoke(option, mode);
+            optionCls.getMethod("setOnceLocation", boolean.class).invoke(option, false);
+            optionCls.getMethod("setInterval", long.class).invoke(option, 5000L);
+            clientCls.getMethod("setLocationOption", optionCls).invoke(locationClient, option);
+            Class<?> listenerCls = Class.forName("com.amap.api.location.AMapLocationListener");
+            Object listener = Proxy.newProxyInstance(getClassLoader(), new Class[]{listenerCls}, new InvocationHandler() {
+                @Override
+                public Object invoke(Object proxy, Method method, Object[] args) {
+                    if (method.getName().equals("onLocationChanged") && args != null && args.length > 0) {
+                        Object loc = args[0];
+                        try {
+                            Method getErrorCode = loc.getClass().getMethod("getErrorCode");
+                            int ec = (int) getErrorCode.invoke(loc);
+                            if (ec == 0) {
+                                double latitude = (double) loc.getClass().getMethod("getLatitude").invoke(loc);
+                                double longitude = (double) loc.getClass().getMethod("getLongitude").invoke(loc);
+                                Class<?> latLngCls = Class.forName("com.amap.api.maps.model.LatLng");
+                                Object latLng = latLngCls.getConstructor(double.class, double.class).newInstance(latitude, longitude);
+                                if (currentLocationMarker != null) {
+                                    try {
+                                        currentLocationMarker.getClass().getMethod("remove").invoke(currentLocationMarker);
+                                    } catch (Exception ignored) {}
+                                }
+                                Class<?> moCls = Class.forName("com.amap.api.maps.model.MarkerOptions");
+                                Object mo = moCls.getConstructor().newInstance();
+                                mo = moCls.getMethod("position", latLngCls).invoke(mo, latLng);
+                                mo = moCls.getMethod("title", String.class).invoke(mo, "当前位置");
+                                mo = moCls.getMethod("snippet", String.class).invoke(mo, "纬度:" + latitude + ", 经度:" + longitude);
+                                Class<?> bdfCls = Class.forName("com.amap.api.maps.model.BitmapDescriptorFactory");
+                                Object icon = bdfCls.getMethod("defaultMarker", float.class).invoke(null, 240f);
+                                mo = moCls.getMethod("icon", Class.forName("com.amap.api.maps.model.BitmapDescriptor")).invoke(mo, icon);
+                                currentLocationMarker = aMap.getClass().getMethod("addMarker", moCls).invoke(aMap, mo);
+                                Class<?> cufCls = Class.forName("com.amap.api.maps.CameraUpdateFactory");
+                                Object cu = cufCls.getMethod("newLatLngZoom", latLngCls, float.class).invoke(null, latLng, 16f);
+                                aMap.getClass().getMethod("moveCamera", Class.forName("com.amap.api.maps.CameraUpdate")).invoke(aMap, cu);
+                                if (isSign) {
+                                    isSign = false;
+                                    Object target = latLngCls.getConstructor(double.class, double.class).newInstance(lat, lon);
+                                    Class<?> amapUtils = Class.forName("com.amap.api.maps.AMapUtils");
+                                    float distance = (float) amapUtils.getMethod("calculateLineDistance", latLngCls, latLngCls).invoke(null, latLng, target);
+                                    if (distance > (float) radius) {
+                                        runOnUiThread(() -> Toast.makeText(MapActivity.this, "超出位置，无法签到", Toast.LENGTH_SHORT).show());
+                                    } else {
+                                        String user_id = getSharedPreferences("auth", MODE_PRIVATE).getString("user_id", "");
+                                        postCheckin(user_id);
+                                    }
+                                }
+                            } else {
+                                String info = String.valueOf(loc.getClass().getMethod("getErrorInfo").invoke(loc));
+                                runOnUiThread(() -> Toast.makeText(MapActivity.this, "定位失败: " + info, Toast.LENGTH_SHORT).show());
+                            }
+                        } catch (Exception e) {
+                            runOnUiThread(() -> Toast.makeText(MapActivity.this, getString(R.string.unable_get_location), Toast.LENGTH_SHORT).show());
+                        }
+                    }
+                    return null;
+                }
+            });
+            clientCls.getMethod("setLocationListener", listenerCls).invoke(locationClient, listener);
+            clientCls.getMethod("startLocation").invoke(locationClient);
         } catch (Exception e) {
-            e.printStackTrace();
+            runOnUiThread(() -> Toast.makeText(MapActivity.this, getString(R.string.unable_get_location), Toast.LENGTH_SHORT).show());
         }
     }
 
@@ -171,36 +272,12 @@ public class MapActivity extends AppCompatActivity implements AMapLocationListen
         }.start();
     }
 
-    @Override
-    public void onLocationChanged(AMapLocation location) {
-        if (location != null && location.getErrorCode() == 0) {
-            double latitude = location.getLatitude();
-            double longitude = location.getLongitude();
-            LatLng latLng = new LatLng(latitude, longitude);
-            // 清除之前的标记
-            if (currentLocationMarker != null) {
-                currentLocationMarker.remove();
-            }
-            // 添加当前位置标记
-            currentLocationMarker = aMap.addMarker(new MarkerOptions().position(latLng).title("当前位置")
-                    .snippet("纬度:" + latitude + ", 经度:" + longitude).icon(BitmapDescriptorFactory
-                            .defaultMarker(BitmapDescriptorFactory.HUE_BLUE)));
-            // 移动地图到当前位置
-            aMap.moveCamera(CameraUpdateFactory.newLatLngZoom(latLng, 16));
-            if (isSign) {
-                isSign = false;
-                float distance = AMapUtils.calculateLineDistance(new LatLng(latitude, longitude), new LatLng(lat, lon));
-                if (distance > radius) {
-                    //超出范围
-                    Toast.makeText(this, "超出位置，无法签到", Toast.LENGTH_SHORT).show();
-                } else {
-                    String user_id = getSharedPreferences("auth", MODE_PRIVATE).getString(
-                            "user_id", "");
-                    postCheckin(user_id);
-                }
-            }
-        } else {
-            Toast.makeText(this, "定位失败: " + location.getErrorInfo(), Toast.LENGTH_SHORT).show();
+    private boolean isClassPresent(String name) {
+        try {
+            Class.forName(name);
+            return true;
+        } catch (ClassNotFoundException e) {
+            return false;
         }
     }
 
@@ -233,26 +310,33 @@ public class MapActivity extends AppCompatActivity implements AMapLocationListen
     }
 
     @Override
-    public void onMapClick(LatLng latLng) {
-        // 地图点击事件
-    }
-
-    @Override
     protected void onResume() {
         super.onResume();
-        mapView.onResume();
+        if (amapAvailable && mapView != null) {
+            try {
+                mapView.getClass().getMethod("onResume").invoke(mapView);
+            } catch (Exception ignored) {}
+        }
     }
 
     @Override
     protected void onPause() {
         super.onPause();
-        mapView.onPause();
+        if (amapAvailable && mapView != null) {
+            try {
+                mapView.getClass().getMethod("onPause").invoke(mapView);
+            } catch (Exception ignored) {}
+        }
     }
 
     @Override
     protected void onSaveInstanceState(Bundle outState) {
         super.onSaveInstanceState(outState);
-        mapView.onSaveInstanceState(outState);
+        if (amapAvailable && mapView != null) {
+            try {
+                mapView.getClass().getMethod("onSaveInstanceState", Bundle.class).invoke(mapView, outState);
+            } catch (Exception ignored) {}
+        }
     }
 
     @Override
@@ -261,10 +345,16 @@ public class MapActivity extends AppCompatActivity implements AMapLocationListen
         if (countDownTimer != null) {
             countDownTimer.cancel();
         }
-        if (locationClient != null) {
-            locationClient.stopLocation();
-            locationClient.onDestroy();
+        if (amapAvailable && locationClient != null) {
+            try {
+                locationClient.getClass().getMethod("stopLocation").invoke(locationClient);
+                locationClient.getClass().getMethod("onDestroy").invoke(locationClient);
+            } catch (Exception ignored) {}
         }
-        mapView.onDestroy();
+        if (amapAvailable && mapView != null) {
+            try {
+                mapView.getClass().getMethod("onDestroy").invoke(mapView);
+            } catch (Exception ignored) {}
+        }
     }
 }

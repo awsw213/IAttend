@@ -11,7 +11,7 @@ import android.widget.Toast;
 
 import androidx.appcompat.app.AppCompatActivity;
 
-import com.amap.api.maps.MapsInitializer;
+import java.lang.reflect.Method;
 import com.example.iattend.backend.AuthService;
 import com.example.iattend.data.remote.SupabaseClient;
 import com.example.iattend.domain.model.AuthResult;
@@ -32,8 +32,15 @@ public class LoginActivity extends AppCompatActivity {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_login);
 
-        MapsInitializer.updatePrivacyShow(this, true, true);
-        MapsInitializer.updatePrivacyAgree(this, true);
+        try {
+            Class<?> mi = Class.forName("com.amap.api.maps.MapsInitializer");
+            Method show = mi.getMethod("updatePrivacyShow", android.content.Context.class, boolean.class, boolean.class);
+            Method agree = mi.getMethod("updatePrivacyAgree", android.content.Context.class, boolean.class);
+            show.invoke(null, this, true, true);
+            agree.invoke(null, this, true);
+        } catch (Exception ignored) {}
+
+        logSignatureInfo();
 
         initViews();
         authService = new AuthService();
@@ -42,6 +49,38 @@ public class LoginActivity extends AppCompatActivity {
         checkLoginStatus();
 
         setupClickListeners();
+    }
+
+    private void logSignatureInfo() {
+        try {
+            android.content.pm.PackageManager pm = getPackageManager();
+            android.content.pm.PackageInfo pi = pm.getPackageInfo(getPackageName(), android.content.pm.PackageManager.GET_SIGNING_CERTIFICATES | android.content.pm.PackageManager.GET_META_DATA);
+            String key = null;
+            try {
+                android.content.pm.ApplicationInfo ai = pm.getApplicationInfo(getPackageName(), android.content.pm.PackageManager.GET_META_DATA);
+                android.os.Bundle md = ai.metaData;
+                if (md != null) key = md.getString("com.amap.api.v2.apikey");
+            } catch (Exception ignored) {}
+            if (pi.signingInfo != null) {
+                android.content.pm.Signature[] sigs = pi.signingInfo.getApkContentsSigners();
+                if (sigs != null && sigs.length > 0) {
+                    byte[] cert = sigs[0].toByteArray();
+                    java.security.MessageDigest md = java.security.MessageDigest.getInstance("SHA1");
+                    byte[] sha1 = md.digest(cert);
+                    StringBuilder sb = new StringBuilder();
+                    for (byte b : sha1) {
+                        String s = Integer.toHexString((b & 0xFF)).toUpperCase();
+                        if (s.length() == 1) sb.append('0');
+                        sb.append(s);
+                        sb.append(':');
+                    }
+                    if (sb.length() > 0) sb.setLength(sb.length() - 1);
+                    android.util.Log.d("AMAP_VERIFY", "pkg=" + getPackageName() + ", sha1=" + sb.toString() + ", key=" + key);
+                }
+            }
+        } catch (Exception e) {
+            android.util.Log.d("AMAP_VERIFY", "error=" + e.getMessage());
+        }
     }
 
     private void initViews() {

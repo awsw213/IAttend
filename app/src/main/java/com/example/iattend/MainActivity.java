@@ -21,24 +21,17 @@ import androidx.core.content.ContextCompat;
 import androidx.recyclerview.widget.LinearLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
 
-import com.amap.api.location.AMapLocation;
-import com.amap.api.location.AMapLocationClient;
-import com.amap.api.location.AMapLocationClientOption;
-import com.amap.api.location.AMapLocationListener;
-import com.amap.api.maps.AMap;
-import com.amap.api.maps.CameraUpdateFactory;
-import com.amap.api.maps.MapView;
-import com.amap.api.maps.model.LatLng;
-import com.amap.api.maps.model.MyLocationStyle;
-import com.amap.api.maps.model.Circle;
-import com.amap.api.maps.model.CircleOptions;
+import android.view.View;
 import android.graphics.Color;
 import com.example.iattend.data.remote.SupabaseClient;
 import com.example.iattend.data.remote.config.SupabaseConfig;
 import com.example.iattend.ui.ProgressArcView;
 import com.google.gson.Gson;
-import com.hjq.permissions.XXPermissions;
-import com.hjq.permissions.permission.PermissionLists;
+import java.lang.reflect.Constructor;
+import java.lang.reflect.Field;
+import java.lang.reflect.InvocationHandler;
+import java.lang.reflect.Method;
+import java.lang.reflect.Proxy;
 
 import java.io.IOException;
 import java.text.SimpleDateFormat;
@@ -53,14 +46,14 @@ import okhttp3.Request;
 import okhttp3.Response;
 import okhttp3.logging.HttpLoggingInterceptor;
 
-public class MainActivity extends AppCompatActivity implements AMapLocationListener {
+public class MainActivity extends AppCompatActivity {
 
     private static final int REQUEST_LOCATION_PERMISSION = 1001;
     private OkHttpClient httpClient;
     private final Gson gson = new Gson();
     private String pendingCode;
     private SessionInfo pendingSession;
-    private MapView mapView;
+    private View mapView;
     private Button btnDoCheckIn;
     private TextView tvSessionInfo;
 
@@ -76,16 +69,18 @@ public class MainActivity extends AppCompatActivity implements AMapLocationListe
     private UnsignedAdapter unsignedAdapter;
     private java.util.List<String> selectedUserIds = new java.util.ArrayList<>();
     private java.util.List<com.example.iattend.data.remote.model.UserProfile> cachedProfiles = new java.util.ArrayList<>();
-    private AMap aMap;
-    private AMapLocationClient mLocationClient;
-    private AMapLocationClientOption mLocationOption;
+    private Object aMap;
+    private Object mLocationClient;
+    private Object mLocationOption;
     private String mCurrentDetailedAddress;
-    private LatLng mCurrentLatLng;
-    private AMapLocation lastLocation;
+    private double lastLat;
+    private double lastLon;
+    private boolean hasLocation;
     private boolean isFirstLoc = true;
-    private Circle fenceCircle;
+    private Object fenceCircle;
     private Double pendingOpenLat, pendingOpenLon, pendingOpenRadius;
     private boolean pendingOpenMap = false;
+    private boolean amapAvailable;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -103,8 +98,26 @@ public class MainActivity extends AppCompatActivity implements AMapLocationListe
                 .writeTimeout(30, TimeUnit.SECONDS)
                 .build();
 
-        mapView = findViewById(R.id.mapView);
-        mapView.onCreate(savedInstanceState);
+        View mapContainer = findViewById(R.id.mapContainer);
+        try {
+            Class<?> mi = Class.forName("com.amap.api.maps.MapsInitializer");
+            Method show = mi.getMethod("updatePrivacyShow", android.content.Context.class, boolean.class, boolean.class);
+            Method agree = mi.getMethod("updatePrivacyAgree", android.content.Context.class, boolean.class);
+            show.invoke(null, this, true, true);
+            agree.invoke(null, this, true);
+        } catch (Exception ignored) {}
+        amapAvailable = isClassPresent("com.amap.api.maps.MapView");
+        if (amapAvailable && mapContainer != null) {
+            try {
+                Class<?> mvCls = Class.forName("com.amap.api.maps.MapView");
+                mapView = (android.view.View) mvCls.getConstructor(android.content.Context.class).newInstance(this);
+                if (mapView instanceof android.view.View) {
+                    ((android.view.View) mapView).setLayoutParams(new android.widget.FrameLayout.LayoutParams(android.widget.FrameLayout.LayoutParams.MATCH_PARENT, android.widget.FrameLayout.LayoutParams.MATCH_PARENT));
+                    ((android.widget.FrameLayout) mapContainer).addView((android.view.View) mapView);
+                }
+                mapView.getClass().getMethod("onCreate", Bundle.class).invoke(mapView, savedInstanceState);
+            } catch (Exception ignored) {}
+        }
         btnDoCheckIn = findViewById(R.id.btnDoCheckIn);
         tvSessionInfo = findViewById(R.id.tvSessionInfo);
         ProgressArcView progressArc = findViewById(R.id.progressArc);
@@ -128,19 +141,14 @@ public class MainActivity extends AppCompatActivity implements AMapLocationListe
         findViewById(R.id.navPersonalCentre).setOnClickListener(v -> selectTab(2));
         selectTab(0);
 
-        XXPermissions.with(this)
-                .permission(PermissionLists.getAccessFineLocationPermission())
-                .request((grantedList, deniedList) -> {
-                    boolean allGranted = deniedList.isEmpty();
-                    if (!allGranted) {
-                        boolean doNotAskAgain = XXPermissions.isDoNotAskAgainPermissions(MainActivity.this, deniedList);
-                        if (doNotAskAgain) {
-                            XXPermissions.startPermissionActivity(MainActivity.this);
-                        }
-                        return;
-                    }
-                    initMap();
-                });
+        boolean fine = ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED;
+        boolean coarse = ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_COARSE_LOCATION) == PackageManager.PERMISSION_GRANTED;
+        if (fine || coarse) {
+            initMap();
+            initLocationConfig();
+        } else {
+            ActivityCompat.requestPermissions(this, new String[]{Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION}, REQUEST_LOCATION_PERMISSION);
+        }
 
         fetchProgress("user-001", value -> runOnUiThread(() -> progressArc.animateTo(value)));
     }
@@ -149,35 +157,62 @@ public class MainActivity extends AppCompatActivity implements AMapLocationListe
      * 初始化 定位配置
      */
     private void initLocationConfig() {
+        if (!amapAvailable) return;
         try {
-            //初始化定位
-            mLocationClient = new AMapLocationClient(getApplicationContext());
-            //设置定位回调监听
-            mLocationClient.setLocationListener(this);
-            //初始化定位参数
-            mLocationOption = new AMapLocationClientOption();
-            //设置定位模式为高精度模式，Battery_Saving为低功耗模式，Device_Sensors是仅设备模式
-            mLocationOption.setLocationMode(AMapLocationClientOption.AMapLocationMode.Hight_Accuracy);
-            //设置是否返回地址信息（默认返回地址信息）
-            mLocationOption.setNeedAddress(true);
-            //设置是否只定位一次,默认为false
-            mLocationOption.setOnceLocation(true);
-            mLocationOption.setHttpTimeOut(30000);
-            //设置是否强制刷新WIFI，默认为强制刷新
-            mLocationOption.setWifiActiveScan(true);
-            //设置是否允许模拟位置,默认为false，不允许模拟位置
-            mLocationOption.setMockEnable(false);
-            //设置定位间隔,单位毫秒,默认为2000ms
-            mLocationOption.setInterval(4000);
-            //给定位客户端对象设置定位参数
-            mLocationClient.setLocationOption(mLocationOption);
-            //多次激活，最好调用一次stop，再调用start以保证场景模式生效
-            //  mLocationClient.stopLocation();
-            // 开始定位
-            mLocationClient.startLocation();
-        } catch (Exception e) {
-            e.printStackTrace();
-        }
+            Class<?> clientCls = Class.forName("com.amap.api.location.AMapLocationClient");
+            Constructor<?> cons = clientCls.getConstructor(android.content.Context.class);
+            mLocationClient = cons.newInstance(getApplicationContext());
+            Class<?> optionCls = Class.forName("com.amap.api.location.AMapLocationClientOption");
+            mLocationOption = optionCls.getConstructor().newInstance();
+            Class<?> modeCls = Class.forName("com.amap.api.location.AMapLocationClientOption$AMapLocationMode");
+            Object mode = modeCls.getField("Hight_Accuracy").get(null);
+            optionCls.getMethod("setLocationMode", modeCls).invoke(mLocationOption, mode);
+            optionCls.getMethod("setNeedAddress", boolean.class).invoke(mLocationOption, true);
+            optionCls.getMethod("setOnceLocation", boolean.class).invoke(mLocationOption, true);
+            optionCls.getMethod("setHttpTimeOut", long.class).invoke(mLocationOption, 30000L);
+            optionCls.getMethod("setWifiActiveScan", boolean.class).invoke(mLocationOption, true);
+            optionCls.getMethod("setMockEnable", boolean.class).invoke(mLocationOption, false);
+            optionCls.getMethod("setInterval", long.class).invoke(mLocationOption, 4000L);
+            clientCls.getMethod("setLocationOption", optionCls).invoke(mLocationClient, mLocationOption);
+            Class<?> listenerCls = Class.forName("com.amap.api.location.AMapLocationListener");
+            Object listener = Proxy.newProxyInstance(getClassLoader(), new Class[]{listenerCls}, new InvocationHandler() {
+                @Override
+                public Object invoke(Object proxy, Method method, Object[] args) {
+                    if (method.getName().equals("onLocationChanged") && args != null && args.length > 0) {
+                        Object amapLocation = args[0];
+                        try {
+                            int err = (int) amapLocation.getClass().getMethod("getErrorCode").invoke(amapLocation);
+                            if (err == 0) {
+                                lastLat = (double) amapLocation.getClass().getMethod("getLatitude").invoke(amapLocation);
+                                lastLon = (double) amapLocation.getClass().getMethod("getLongitude").invoke(amapLocation);
+                                hasLocation = true;
+                                mCurrentDetailedAddress = String.valueOf(amapLocation.getClass().getMethod("getAddress").invoke(amapLocation));
+                                if (isFirstLoc && aMap != null) {
+                                    try {
+                                        Object zoom = Class.forName("com.amap.api.maps.CameraUpdateFactory").getMethod("zoomTo", float.class).invoke(null, 17f);
+                                        aMap.getClass().getMethod("moveCamera", Class.forName("com.amap.api.maps.CameraUpdate")).invoke(aMap, zoom);
+                                        Object latLng = Class.forName("com.amap.api.maps.model.LatLng").getConstructor(double.class, double.class).newInstance(lastLat, lastLon);
+                                        Object cu = Class.forName("com.amap.api.maps.CameraUpdateFactory").getMethod("changeLatLng", Class.forName("com.amap.api.maps.model.LatLng")).invoke(null, latLng);
+                                        aMap.getClass().getMethod("moveCamera", Class.forName("com.amap.api.maps.CameraUpdate")).invoke(aMap, cu);
+                                        isFirstLoc = false;
+                                    } catch (Exception ignored) {}
+                                }
+                                if (pendingSession != null && tvSessionInfo != null) {
+                                    double cLat = pendingSession.location_data != null && pendingSession.location_data.lat != null ? pendingSession.location_data.lat : pendingSession.center_lat;
+                                    double cLon = pendingSession.location_data != null && pendingSession.location_data.lon != null ? pendingSession.location_data.lon : pendingSession.center_lon;
+                                    Long endMs = parseIsoToMillis(pendingSession.expires_at);
+                                    double d = distanceMeters(lastLat, lastLon, cLat, cLon);
+                                    runOnUiThread(() -> tvSessionInfo.setText(getString(R.string.session_info_with_distance, safe(pendingSession.course_name), remainingString(endMs), pendingCode, (int) d)));
+                                }
+                            }
+                        } catch (Exception ignored) {}
+                    }
+                    return null;
+                }
+            });
+            clientCls.getMethod("setLocationListener", listenerCls).invoke(mLocationClient, listener);
+            clientCls.getMethod("startLocation").invoke(mLocationClient);
+        } catch (Exception ignored) {}
     }
 
     private void showCodeDialog() {
@@ -273,14 +308,14 @@ public class MainActivity extends AppCompatActivity implements AMapLocationListe
             Toast.makeText(this, getString(R.string.please_enter_code), Toast.LENGTH_SHORT).show();
             return;
         }
-        if (lastLocation == null) {
+        if (!hasLocation) {
             Toast.makeText(this, getString(R.string.enable_gps_retry), Toast.LENGTH_SHORT).show();
             return;
         }
         double cLat = pendingSession.location_data != null && pendingSession.location_data.lat != null ? pendingSession.location_data.lat : pendingSession.center_lat;
         double cLon = pendingSession.location_data != null && pendingSession.location_data.lon != null ? pendingSession.location_data.lon : pendingSession.center_lon;
         double radius = pendingSession.location_data != null && pendingSession.location_data.radius_m != null ? pendingSession.location_data.radius_m : (pendingSession.radius_m != null ? pendingSession.radius_m : 0.0);
-        double d = distanceMeters(lastLocation.getLatitude(), lastLocation.getLongitude(), cLat, cLon);
+        double d = distanceMeters(lastLat, lastLon, cLat, cLon);
         long now = System.currentTimeMillis();
         if (radius > 0 && d > radius) {
             Toast.makeText(this, getString(R.string.out_of_range), Toast.LENGTH_SHORT).show();
@@ -304,7 +339,7 @@ public class MainActivity extends AppCompatActivity implements AMapLocationListe
                 .setPositiveButton(getString(R.string.confirm), (dialog, which) -> {
                     startFaceRecognition(() -> {
                         SupabaseClient.getInstance()
-                                .submitCheckIn(pendingCode, lastLocation.getLatitude(), lastLocation.getLongitude(), (int) d, System.currentTimeMillis())
+                                .submitCheckIn(pendingCode, lastLat, lastLon, (int) d, System.currentTimeMillis())
                                 .thenAccept(success -> runOnUiThread(() -> {
                                     if (success) {
                                         btnDoCheckIn.setEnabled(false);
@@ -334,52 +369,43 @@ public class MainActivity extends AppCompatActivity implements AMapLocationListe
     }
 
     private void initMap() {
-        if (aMap == null) {
-            aMap = mapView.getMap();
-        }
-        MyLocationStyle myLocationStyle;
-        myLocationStyle = new MyLocationStyle();//初始化定位蓝点样式类myLocationStyle.myLocationType(MyLocationStyle.LOCATION_TYPE_LOCATION_ROTATE);//连续定位、且将视角移动到地图中心点，定位点依照设备方向旋转，并且会跟随设备移动。（1秒1次定位）如果不设置myLocationType，默认也会执行此种模式。
-        myLocationStyle.interval(2000); //设置连续定位模式下的定位间隔，只在连续定位模式下生效，单次定位模式下不会生效。单位为毫秒。
-        aMap.setMyLocationStyle(myLocationStyle);//设置定位蓝点的Style
-        //aMap.getUiSettings().setMyLocationButtonEnabled(true);设置默认定位按钮是否显示，非必需设置。
-        aMap.setMyLocationEnabled(true);// 设置为true表示启动显示定位蓝点，false表示隐藏定位蓝点并不进行定位，默认是false。
-        initLocationConfig();
-//        WebSettings s = webView.getSettings();
-//        s.setJavaScriptEnabled(true);
-//        s.setDomStorageEnabled(true);
-//        String html = "<html><head>" +
-//                "<meta name='viewport' content='width=device-width, initial-scale=1'>" +
-//                "<link rel='stylesheet' href='https://unpkg.com/leaflet@1.9.4/dist/leaflet.css'/>" +
-//                "<script src='https://unpkg.com/leaflet@1.9.4/dist/leaflet.js'></script>" +
-//                "<style>html,body,#map{height:100%;margin:0;padding:0}</style>" +
-//                "</head><body><div id='map'></div>" +
-//                "<script>" +
-//                "var map=L.map('map').setView([0,0],16);" +
-//                "L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{maxZoom:19}).addTo(map);" +
-//                "var userMarker=L.marker([0,0]);" +
-//                "var fence=null;" +
-//                "function updateUserLocation(lat,lon){if(!userMarker._map){userMarker.addTo(map)}userMarker.setLatLng([lat,lon]);}" +
-//                "function setFence(lat,lon,r){if(fence){map.removeLayer(fence)}fence=L.circle([lat,lon],{radius:r,color:'green',fillColor:'#3f3',fillOpacity:0.2}).addTo(map);map.panTo([lat,lon]);}" +
-//                "</script></body></html>";
-//        webView.loadDataWithBaseURL(null, html, "text/html", "UTF-8", null);
+        if (!amapAvailable || mapView == null) return;
+        try {
+            Method getMap = mapView.getClass().getMethod("getMap");
+            aMap = getMap.invoke(mapView);
+            Class<?> myStyleCls = Class.forName("com.amap.api.maps.model.MyLocationStyle");
+            Object myLocationStyle = myStyleCls.getConstructor().newInstance();
+            myStyleCls.getMethod("interval", long.class).invoke(myLocationStyle, 2000L);
+            aMap.getClass().getMethod("setMyLocationStyle", myStyleCls).invoke(aMap, myLocationStyle);
+            aMap.getClass().getMethod("setMyLocationEnabled", boolean.class).invoke(aMap, true);
+        } catch (Exception ignored) {}
     }
 
     private void setFenceOnMap(double lat, double lon, double radius) {
-        if (aMap == null) {
-            return;
-        }
-        if (fenceCircle != null) {
-            fenceCircle.remove();
-            fenceCircle = null;
-        }
-        fenceCircle = aMap.addCircle(new CircleOptions()
-                .center(new LatLng(lat, lon))
-                .radius(radius)
-                .strokeColor(Color.parseColor("#4CAF50"))
-                .strokeWidth(3f)
-                .fillColor(Color.parseColor("#334CAF50"))
-        );
-        aMap.moveCamera(CameraUpdateFactory.newLatLngZoom(new LatLng(lat, lon), 15));
+        if (!amapAvailable || aMap == null) return;
+        try {
+            if (fenceCircle != null) {
+                try { fenceCircle.getClass().getMethod("remove").invoke(fenceCircle); } catch (Exception ignored) {}
+                fenceCircle = null;
+            }
+            Class<?> circleOptsCls = Class.forName("com.amap.api.maps.model.CircleOptions");
+            Object opts = circleOptsCls.getConstructor().newInstance();
+            Class<?> latLngCls = Class.forName("com.amap.api.maps.model.LatLng");
+            Object latLng = latLngCls.getConstructor(double.class, double.class).newInstance(lat, lon);
+            Method center = circleOptsCls.getMethod("center", latLngCls);
+            Method radiusM = circleOptsCls.getMethod("radius", double.class);
+            Method strokeC = circleOptsCls.getMethod("strokeColor", int.class);
+            Method strokeW = circleOptsCls.getMethod("strokeWidth", float.class);
+            Method fillC = circleOptsCls.getMethod("fillColor", int.class);
+            opts = center.invoke(opts, latLng);
+            opts = radiusM.invoke(opts, radius);
+            opts = strokeC.invoke(opts, Color.parseColor("#4CAF50"));
+            opts = strokeW.invoke(opts, 3f);
+            opts = fillC.invoke(opts, Color.parseColor("#334CAF50"));
+            fenceCircle = aMap.getClass().getMethod("addCircle", circleOptsCls).invoke(aMap, opts);
+            Object cu = Class.forName("com.amap.api.maps.CameraUpdateFactory").getMethod("newLatLngZoom", latLngCls, float.class).invoke(null, latLng, 15f);
+            aMap.getClass().getMethod("moveCamera", Class.forName("com.amap.api.maps.CameraUpdate")).invoke(aMap, cu);
+        } catch (Exception ignored) {}
     }
 
     private void openSignInMap(double lat, double lon, double radius) {
@@ -389,34 +415,41 @@ public class MainActivity extends AppCompatActivity implements AMapLocationListe
     @Override
     protected void onDestroy() {
         super.onDestroy();
-        //在activity执行onDestroy时执行mMapView.onDestroy()，销毁地图
-        mapView.onDestroy();
-        if (mLocationClient != null) {
-            mLocationClient.stopLocation();
-            mLocationClient.onDestroy();
-            mLocationClient = null;
+        if (amapAvailable && mapView != null) {
+            try { mapView.getClass().getMethod("onDestroy").invoke(mapView); } catch (Exception ignored) {}
+        }
+        if (amapAvailable && mLocationClient != null) {
+            try {
+                mLocationClient.getClass().getMethod("stopLocation").invoke(mLocationClient);
+                mLocationClient.getClass().getMethod("onDestroy").invoke(mLocationClient);
+                mLocationClient = null;
+            } catch (Exception ignored) {}
         }
     }
 
     @Override
     protected void onResume() {
         super.onResume();
-        //在activity执行onResume时执行mMapView.onResume ()，重新绘制加载地图
-        mapView.onResume();
+        if (amapAvailable && mapView != null) {
+            try { mapView.getClass().getMethod("onResume").invoke(mapView); } catch (Exception ignored) {}
+        }
     }
 
     @Override
     protected void onPause() {
         super.onPause();
-        //在activity执行onPause时执行mMapView.onPause ()，暂停地图的绘制
-        mapView.onPause();
+        if (amapAvailable && mapView != null) {
+            try { mapView.getClass().getMethod("onPause").invoke(mapView); } catch (Exception ignored) {}
+        }
     }
 
     @Override
     protected void onSaveInstanceState(Bundle outState) {
         super.onSaveInstanceState(outState);
         //在activity执行onSaveInstanceState时执行mMapView.onSaveInstanceState (outState)，保存地图当前的状态
-        mapView.onSaveInstanceState(outState);
+        if (amapAvailable && mapView != null) {
+            try { mapView.getClass().getMethod("onSaveInstanceState", Bundle.class).invoke(mapView, outState); } catch (Exception ignored) {}
+        }
     }
 
     private String remainingString(Long endMs) {
@@ -481,36 +514,8 @@ public class MainActivity extends AppCompatActivity implements AMapLocationListe
         tvPersonal.setSelected(p);
     }
 
-    @Override
-    public void onLocationChanged(AMapLocation amapLocation) {
-        if (amapLocation != null) {
-            //定位成功回调信息
-            if (amapLocation.getErrorCode() == 0) {
-                lastLocation = amapLocation;
-                mCurrentDetailedAddress = amapLocation.getAddress();
-                if (isFirstLoc) {
-                    //设置缩放级别17
-                    aMap.moveCamera(CameraUpdateFactory.zoomTo(17));
-                    //中心位置为当前坐标
-                    aMap.moveCamera(CameraUpdateFactory.changeLatLng(new LatLng(amapLocation.getLatitude(), amapLocation.getLongitude())));
-                    isFirstLoc = false;
-                }
-                if (pendingSession != null && tvSessionInfo != null) {
-                    double cLat = pendingSession.location_data != null && pendingSession.location_data.lat != null ? pendingSession.location_data.lat : pendingSession.center_lat;
-                    double cLon = pendingSession.location_data != null && pendingSession.location_data.lon != null ? pendingSession.location_data.lon : pendingSession.center_lon;
-                    Long endMs = parseIsoToMillis(pendingSession.expires_at);
-                    double d = distanceMeters(amapLocation.getLatitude(), amapLocation.getLongitude(), cLat, cLon);
-                    tvSessionInfo.setText(getString(R.string.session_info_with_distance, safe(pendingSession.course_name), remainingString(endMs), pendingCode, (int) d));
-                }
-                // 记录当前定位的坐标
-                mCurrentLatLng = new LatLng(amapLocation.getLatitude(), amapLocation.getLongitude());
-                //重新移动到中心位置
-                //aMap.moveCamera(CameraUpdateFactory.changeLatLng(new LatLng(amapLocation.getLatitude(), amapLocation.getLongitude())));
-                Log.e("test-z", "----当前位置：" + amapLocation.getLatitude() + "," + amapLocation.getLongitude() + " ," + mCurrentDetailedAddress);
-            } else {
-                mCurrentLatLng = null;
-            }
-        }
+    private boolean isClassPresent(String name) {
+        try { Class.forName(name); return true; } catch (ClassNotFoundException e) { return false; }
     }
 
     private interface ProgressCallback { void onValue(float v); }
@@ -611,12 +616,12 @@ public class MainActivity extends AppCompatActivity implements AMapLocationListe
             return;
         }
         ensureLocationPermission();
-        if (lastLocation == null) {
+        if (!hasLocation) {
             Toast.makeText(this, getString(R.string.unable_get_location), Toast.LENGTH_SHORT).show();
             return;
         }
-        double lat = lastLocation.getLatitude();
-        double lon = lastLocation.getLongitude();
+        double lat = lastLat;
+        double lon = lastLon;
         long now = System.currentTimeMillis();
         long end = now + minutes * 60_000L;
         double radius = 100.0;
