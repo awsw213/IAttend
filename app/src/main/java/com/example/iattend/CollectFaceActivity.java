@@ -7,6 +7,7 @@ import android.graphics.Matrix;
 import android.graphics.SurfaceTexture;
 import android.hardware.Camera;
 import android.os.Bundle;
+import android.view.Surface;
 import android.view.TextureView;
 import android.view.View;
 import android.widget.Button;
@@ -37,14 +38,20 @@ public class CollectFaceActivity extends AppCompatActivity {
 
     private static final int REQUEST_CAMERA_PERMISSION = 101;
     private static final String[] CAMERA_PERMISSIONS = {
-            android.Manifest.permission.CAMERA,
-            android.Manifest.permission.WRITE_EXTERNAL_STORAGE
+            android.Manifest.permission.CAMERA
     };
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_collect_face);
+
+        // 首先检查设备是否有相机硬件
+        if (!checkCameraHardware()) {
+            showToast("Device has no camera or camera is not accessible");
+            finish();
+            return;
+        }
 
         initViews();
         authService = new AuthService();
@@ -105,10 +112,14 @@ public class CollectFaceActivity extends AppCompatActivity {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults);
         if (requestCode == REQUEST_CAMERA_PERMISSION) {
             if (grantResults.length > 0 && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
+                // 权限已授予，检查设备是否支持相机
                 if (checkCameraHardware() && textureView.isAvailable()) {
                     setupCamera();
                 } else if (!textureView.isAvailable()) {
                     showToast("Waiting for camera preview...");
+                } else {
+                    // 如果 checkCameraHardware() 返回 false，showToast 已经在里面调用过了
+                    finish();
                 }
             } else {
                 showToast("Camera permission is required to take photos");
@@ -153,6 +164,7 @@ public class CollectFaceActivity extends AppCompatActivity {
 
             if (!hasFrontCamera && numberOfCameras > 0) {
                 cameraId = 0; // 使用默认摄像头
+                Camera.getCameraInfo(cameraId, cameraInfo);
             }
 
             // 2. 安全打开相机
@@ -177,7 +189,10 @@ public class CollectFaceActivity extends AppCompatActivity {
 
             camera.setParameters(parameters);
 
-            // 4. 设置预览（确保 SurfaceTexture 可用）
+            // 4. 设置预览旋转（关键修复）
+            setCameraDisplayOrientation(cameraId, cameraInfo);
+
+            // 5. 设置预览（确保 SurfaceTexture 可用）
             if (textureView.getSurfaceTexture() != null) {
                 camera.setPreviewTexture(textureView.getSurfaceTexture());
                 camera.startPreview();
@@ -193,6 +208,39 @@ public class CollectFaceActivity extends AppCompatActivity {
         }
     }
 
+    /**
+     * 设置相机预览旋转方向
+     * 确保预览画面在竖屏模式下正确显示
+     */
+    private void setCameraDisplayOrientation(int cameraId, Camera.CameraInfo cameraInfo) {
+        if (camera == null) return;
+
+        // 获取设备当前旋转角度
+        int rotation = getWindowManager().getDefaultDisplay().getRotation();
+        int degrees = 0;
+
+        switch (rotation) {
+            case Surface.ROTATION_0: degrees = 0; break;
+            case Surface.ROTATION_90: degrees = 90; break;
+            case Surface.ROTATION_180: degrees = 180; break;
+            case Surface.ROTATION_270: degrees = 270; break;
+        }
+
+        // 计算预览方向
+        int result;
+        if (cameraInfo.facing == Camera.CameraInfo.CAMERA_FACING_FRONT) {
+            // 前置摄像头
+            result = (cameraInfo.orientation + degrees) % 360;
+            result = (360 - result) % 360; // 补偿前置摄像头的镜像
+        } else {
+            // 后置摄像头
+            result = (cameraInfo.orientation - degrees + 360) % 360;
+        }
+
+        // 设置预览旋转
+        camera.setDisplayOrientation(result);
+    }
+
     private void setupClickListeners() {
         btnTakePhoto.setOnClickListener(v -> takePhoto());
         btnRetake.setOnClickListener(v -> retakePhoto());
@@ -203,7 +251,7 @@ public class CollectFaceActivity extends AppCompatActivity {
         if (camera != null) {
             camera.takePicture(null, null, (data, camera) -> {
                 capturedBitmap = BitmapFactory.decodeByteArray(data, 0, data.length);
-                capturedBitmap = rotateBitmap(capturedBitmap, 90);
+                capturedBitmap = rotateCapturedBitmap(capturedBitmap);
 
                 runOnUiThread(this::showPhotoControls);
             });
@@ -328,6 +376,66 @@ public class CollectFaceActivity extends AppCompatActivity {
         mtx.postRotate(degree);
 
         if (Camera.CameraInfo.CAMERA_FACING_FRONT == 1) {
+            mtx.postScale(-1, 1);
+        }
+
+        return Bitmap.createBitmap(bitmap, 0, 0, w, h, mtx, true);
+    }
+
+    /**
+     * 智能旋转拍摄的图片
+     * 根据当前使用的摄像头方向动态调整
+     */
+    private Bitmap rotateCapturedBitmap(Bitmap bitmap) {
+        int w = bitmap.getWidth();
+        int h = bitmap.getHeight();
+
+        Matrix mtx = new Matrix();
+
+        // 获取设备当前旋转角度
+        int rotation = getWindowManager().getDefaultDisplay().getRotation();
+        int degrees = 0;
+
+        switch (rotation) {
+            case Surface.ROTATION_0: degrees = 0; break;
+            case Surface.ROTATION_90: degrees = 90; break;
+            case Surface.ROTATION_180: degrees = 180; break;
+            case Surface.ROTATION_270: degrees = 270; break;
+        }
+
+        // 获取当前相机信息
+        Camera.CameraInfo cameraInfo = new Camera.CameraInfo();
+        int cameraId = -1;
+        int numberOfCameras = Camera.getNumberOfCameras();
+
+        // 查找当前打开的相机
+        for (int i = 0; i < numberOfCameras; i++) {
+            Camera.getCameraInfo(i, cameraInfo);
+            if (cameraInfo.facing == Camera.CameraInfo.CAMERA_FACING_FRONT) {
+                cameraId = i;
+                break;
+            }
+        }
+
+        if (cameraId == -1 && numberOfCameras > 0) {
+            cameraId = 0;
+            Camera.getCameraInfo(cameraId, cameraInfo);
+        }
+
+        // 计算旋转角度
+        int rotateDegree;
+        if (cameraInfo.facing == Camera.CameraInfo.CAMERA_FACING_FRONT) {
+            rotateDegree = (cameraInfo.orientation + degrees) % 360;
+            rotateDegree = (360 - rotateDegree) % 360; // 镜像补偿
+        } else {
+            rotateDegree = (cameraInfo.orientation - degrees + 360) % 360;
+        }
+
+        // 应用旋转
+        mtx.postRotate(rotateDegree);
+
+        // 前置摄像头需要镜像处理
+        if (cameraInfo.facing == Camera.CameraInfo.CAMERA_FACING_FRONT) {
             mtx.postScale(-1, 1);
         }
 

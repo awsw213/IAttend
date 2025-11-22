@@ -6,10 +6,9 @@ import com.google.gson.annotations.SerializedName;
  * 反馈数据模型
  * 对应 Supabase 中的 feedbacks 表
  *
- * 表结构：
+ * 表结构（已移除 type 字段以匹配数据库）：
  * - id: bigint (自增主键) → Long
  * - user_id: uuid (外键) → String
- * - type: text (反馈类型) → String
  * - content: text (反馈内容) → String
  * - image_url: text (可选图片) → String
  * - status: text (状态，默认 'pending') → String
@@ -25,9 +24,6 @@ public class Feedback {
 
     @SerializedName("user_id")
     private String userId; // uuid → String
-
-    @SerializedName("type")
-    private String type; // text → String
 
     @SerializedName("content")
     private String content; // text → String
@@ -53,13 +49,11 @@ public class Feedback {
      * 构造函数：创建反馈（不含图片）
      *
      * @param userId 用户ID
-     * @param type 反馈类型
      * @param content 反馈内容
      */
-    public Feedback(String userId, String type, String content) {
+    public Feedback(String userId, String content) {
         this(); // 调用默认构造函数设置 status
         this.userId = userId;
-        this.type = type;
         this.content = content;
     }
 
@@ -67,12 +61,11 @@ public class Feedback {
      * 构造函数：创建反馈（含图片）
      *
      * @param userId 用户ID
-     * @param type 反馈类型
      * @param content 反馈内容
      * @param imageUrl 图片URL
      */
-    public Feedback(String userId, String type, String content, String imageUrl) {
-        this(userId, type, content); // 复用上面的构造函数
+    public Feedback(String userId, String content, String imageUrl) {
+        this(userId, content); // 复用上面的构造函数
         this.imageUrl = imageUrl;
     }
 
@@ -84,10 +77,6 @@ public class Feedback {
 
     public String getUserId() {
         return userId;
-    }
-
-    public String getType() {
-        return type;
     }
 
     public String getContent() {
@@ -114,10 +103,6 @@ public class Feedback {
 
     public void setUserId(String userId) {
         this.userId = userId;
-    }
-
-    public void setType(String type) {
-        this.type = type;
     }
 
     public void setContent(String content) {
@@ -165,8 +150,8 @@ public class Feedback {
             : content;
 
         return String.format(
-            "Feedback{id=%s, type='%s', userId='%s', hasImage=%s, status='%s'}",
-            id, type, userId, hasImage(), status
+            "Feedback{id=%s, userId='%s', hasImage=%s, status='%s'}",
+            id, userId, hasImage(), status
         );
     }
 
@@ -177,7 +162,6 @@ public class Feedback {
         return "Feedback{" +
             "id=" + id +
             ", userId='" + userId + '\'' +
-            ", type='" + type + '\'' +
             ", content='" + (content != null && content.length() > 100
                              ? content.substring(0, 100) + "..."
                              : content) + '\'' +

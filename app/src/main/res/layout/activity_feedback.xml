@@ -17,18 +17,19 @@
             android:textStyle="bold"
             android:layout_marginBottom="32dp" />
 
-        <!-- 反馈类型 -->
+        <!-- 反馈类型（用户可自由输入） -->
         <com.google.android.material.textfield.TextInputLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_marginBottom="16dp"
-            android:hint="Feedback Type">
+            android:hint="Feedback Type (Optional)">
 
-            <AutoCompleteTextView
+            <com.google.android.material.textfield.TextInputEditText
                 android:id="@+id/actvType"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:inputType="none" />
+                android:inputType="text"
+                android:maxLines="1" />
 
         </com.google.android.material.textfield.TextInputLayout>
 
