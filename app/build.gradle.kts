@@ -58,6 +58,15 @@ dependencies {
     // JSON parsing
     implementation("com.google.code.gson:gson:2.10.1")
 
+    // Supabase
+    implementation("io.github.jan-tennert.supabase:postgrest-kt:3.0.0")
+    implementation("io.github.jan-tennert.supabase:storage-kt:3.0.0")
+    implementation("io.github.jan-tennert.supabase:functions-kt:3.0.0")
+    implementation("io.ktor:ktor-client-core:2.3.12")
+    implementation("io.ktor:ktor-client-android:2.3.12")
+    implementation("io.ktor:ktor-client-content-negotiation:2.3.12")
+    implementation("io.ktor:ktor-serialization-kotlinx-json:2.3.12")
+
     // Image loading with Glide
     implementation("com.github.bumptech.glide:glide:4.16.0")
     annotationProcessor("com.github.bumptech.glide:compiler:4.16.0")

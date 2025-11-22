@@ -204,13 +204,14 @@ public class SupabaseClient {
                         MediaType.get("application/json")
                 );
 
+                // 使用 PATCH 方法更新现有记录（而不是 POST）
                 Request request = new Request.Builder()
-                        .url(SupabaseConfig.REST_BASE_URL + "/" + SupabaseConfig.PROFILES_TABLE)
+                        .url(SupabaseConfig.REST_BASE_URL + "/" + SupabaseConfig.PROFILES_TABLE + "?user_id=eq." + profile.getUserId())
                         .addHeader("apikey", SupabaseConfig.SUPABASE_KEY)
                         .addHeader("Authorization", "Bearer " + currentToken)
                         .addHeader("Content-Type", "application/json")
                         .addHeader("Prefer", "return=representation")
-                        .post(body)
+                        .patch(body)
                         .build();
 
                 try (Response response = httpClient.newCall(request).execute()) {

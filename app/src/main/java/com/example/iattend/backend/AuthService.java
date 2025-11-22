@@ -207,6 +207,15 @@ public class AuthService {
         return supabaseClient.isUserLoggedIn();
     }
 
+    /**
+     * 获取当前用户的 session token
+     *
+     * @return String 当前用户的 session token，如果未登录返回null
+     */
+    public String getCurrentToken() {
+        return supabaseClient.getCurrentToken();
+    }
+
     // ========== 私有辅助方法 ==========
 
     /**

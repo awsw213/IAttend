@@ -18,7 +18,7 @@ import java.util.concurrent.CompletableFuture;
  *
  * 使用示例：
  * UserService userService = new UserService();
- * userService.uploadAvatar("user_id", "avatar.jpg", imageData)
+ * userService.uploadAvatar("user_id", "avatar.jpg", imageData, userToken)
  *     .thenAccept(avatarUrl -> {
  *         // 上传成功，URL 可直接使用
  *     })
@@ -35,6 +35,7 @@ public class UserService {
      * 初始化 SupabaseStorageClient
      */
     public UserService() {
+        // 使用 SupabaseStorageClient 实例
         this.storageClient = SupabaseStorageClient.getInstance();
     }
 
@@ -42,25 +43,26 @@ public class UserService {
      * 上传用户头像
      *
      * 工作流程：
-     * 1. 构造文件路径：{userId}/{filename}
-     * 2. 上传到 avatars 桶
+     * 1. 构造文件路径：{userId}/avatar.jpg (固定文件名)
+     * 2. 使用用户 token 上传到 avatars 桶
      * 3. 返回 public URL
      *
      * @param userId 用户ID（用于组织文件夹结构）
-     * @param fileName 文件名（例如：avatar_20251119_120000.jpg）
-     * @param imageData 图片二进制数据（JPEG 格式）
+     * @param imageData 图片二进制数据（JPEG 格式，质量80%）
+     * @param userToken 用户的 session token（用于 Storage 认证）
      * @return CompletableFuture<String> 头像的 public URL
      */
-    public CompletableFuture<String> uploadAvatar(String userId, String fileName, byte[] imageData) {
-        // 根据 userId 组织文件夹，避免文件名冲突
-        String filePath = userId + "/" + fileName;
+    public CompletableFuture<String> uploadAvatar(String userId, byte[] imageData, String userToken) {
+        // 构造固定的文件路径: userId/avatar.jpg
+        // 符合 SQL 策略: auth.uid()::text = (storage.foldername(name))[1]
+        String filePath = userId + "/avatar.jpg";
 
         // 上传到 avatars 桶
         return storageClient.uploadFile(
             SupabaseConfig.AVATAR_BUCKET,
             filePath,
             imageData,
-            "image/jpeg"
+            userToken
         );
     }
 }

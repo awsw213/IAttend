@@ -18,6 +18,7 @@ import androidx.core.content.ContextCompat;
 
 import com.example.iattend.backend.AuthService;
 import com.example.iattend.backend.UserService;
+import com.example.iattend.backend.utils.LogUtils;
 import com.example.iattend.domain.model.AuthResult;
 import com.example.iattend.domain.model.User;
 
@@ -279,14 +280,15 @@ public class CollectFaceActivity extends AppCompatActivity {
     private void uploadImageToServer(Bitmap bitmap) {
         showLoading(true);
 
-        // 将 Bitmap 转换为 byte array
+        // 压缩图片 - 调整为合理大小（保持方向不变）
+        Bitmap resizedBitmap = resizeBitmap(bitmap, 512, 512);
         ByteArrayOutputStream stream = new ByteArrayOutputStream();
-        bitmap.compress(Bitmap.CompressFormat.JPEG, 80, stream);
+        resizedBitmap.compress(Bitmap.CompressFormat.JPEG, 80, stream);  // JPEG 格式，质量 80%
         byte[] imageData = stream.toByteArray();
 
-        // 生成文件名
-        String timeStamp = new SimpleDateFormat("yyyyMMdd_HHmmss", Locale.getDefault()).format(new Date());
-        String fileName = "avatar_" + timeStamp + ".jpg";
+        LogUtils.d("CollectFaceActivity", "Compressed image size: " + imageData.length + " bytes");
+        LogUtils.d("CollectFaceActivity", "Original bitmap: " + bitmap.getWidth() + "x" + bitmap.getHeight());
+        LogUtils.d("CollectFaceActivity", "Resized bitmap: " + resizedBitmap.getWidth() + "x" + resizedBitmap.getHeight());
 
         // 获取当前用户
         CompletableFuture<User> userFuture = authService.getCurrentUser();
@@ -299,8 +301,18 @@ public class CollectFaceActivity extends AppCompatActivity {
                 return;
             }
 
-            // 上传头像
-            CompletableFuture<String> uploadFuture = userService.uploadAvatar(user.getId(), fileName, imageData);
+            // 获取用户 session token（用于 Storage 认证）
+            String userToken = authService.getCurrentToken();
+            if (userToken == null || userToken.isEmpty()) {
+                runOnUiThread(() -> {
+                    showLoading(false);
+                    showToast("User token not available");
+                });
+                return;
+            }
+
+            // 上传头像到 userId/avatar.jpg（传入用户token）
+            CompletableFuture<String> uploadFuture = userService.uploadAvatar(user.getId(), imageData, userToken);
             uploadFuture.thenAccept(avatarUrl -> {
                 if (avatarUrl != null && !avatarUrl.isEmpty()) {
                     // 更新用户信息的头像URL
@@ -368,6 +380,28 @@ public class CollectFaceActivity extends AppCompatActivity {
         btnRetake.setEnabled(!show);
     }
 
+    /**
+     * 调整图片尺寸
+     */
+    private Bitmap resizeBitmap(Bitmap bitmap, int maxWidth, int maxHeight) {
+        int width = bitmap.getWidth();
+        int height = bitmap.getHeight();
+
+        float ratioBitmap = (float) width / (float) height;
+        float ratioMax = (float) maxWidth / (float) maxHeight;
+
+        int finalWidth = maxWidth;
+        int finalHeight = maxHeight;
+
+        if (ratioMax > ratioBitmap) {
+            finalWidth = (int) (maxHeight * ratioBitmap);
+        } else {
+            finalHeight = (int) (maxWidth / ratioBitmap);
+        }
+
+        return Bitmap.createScaledBitmap(bitmap, finalWidth, finalHeight, true);
+    }
+
     private Bitmap rotateBitmap(Bitmap bitmap, int degree) {
         int w = bitmap.getWidth();
         int h = bitmap.getHeight();
@@ -425,19 +459,20 @@ public class CollectFaceActivity extends AppCompatActivity {
         // 计算旋转角度
         int rotateDegree;
         if (cameraInfo.facing == Camera.CameraInfo.CAMERA_FACING_FRONT) {
-            rotateDegree = (cameraInfo.orientation + degrees) % 360;
-            rotateDegree = (360 - rotateDegree) % 360; // 镜像补偿
-        } else {
+            // 前置摄像头：减去设备旋转角度
             rotateDegree = (cameraInfo.orientation - degrees + 360) % 360;
+        } else {
+            // 后置摄像头：减去设备旋转角度
+            rotateDegree = (cameraInfo.orientation - degrees + 360) % 360;
+        }
+
+        // 前置摄像头需要镜像处理（必须在旋转之前！）
+        if (cameraInfo.facing == Camera.CameraInfo.CAMERA_FACING_FRONT) {
+            mtx.postScale(-1, 1);  // 水平镜像
         }
 
         // 应用旋转
         mtx.postRotate(rotateDegree);
-
-        // 前置摄像头需要镜像处理
-        if (cameraInfo.facing == Camera.CameraInfo.CAMERA_FACING_FRONT) {
-            mtx.postScale(-1, 1);
-        }
 
         return Bitmap.createBitmap(bitmap, 0, 0, w, h, mtx, true);
     }

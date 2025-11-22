@@ -1,111 +1,118 @@
 package com.example.iattend.data.remote;
 
 import com.example.iattend.data.remote.config.SupabaseConfig;
-import com.google.gson.Gson;
+import com.example.iattend.backend.utils.LogUtils;
 
-import okhttp3.*;
-
+import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.util.concurrent.CompletableFuture;
 
+import okhttp3.MediaType;
+import okhttp3.OkHttpClient;
+import okhttp3.Request;
+import okhttp3.RequestBody;
+import okhttp3.Response;
+import okhttp3.logging.HttpLoggingInterceptor;
+
 /**
  * Supabase Storage 客户端
- * 负责文件上传和管理
+ * 使用 OkHttp 实现文件上传，支持用户认证
  *
- * 功能：
- * 1. 上传文件到 Supabase Storage
- * 2. 获取 public URL
- * 3. 支持断点续传（未来扩展）
- *
- * 使用示例：
- * SupabaseStorageClient storage = SupabaseStorageClient.getInstance();
- * storage.uploadFile("avatars", "user123/avatar.jpg", imageData, "image/jpeg")
- *     .thenAccept(url -> Log.d("Upload", "URL: " + url))
- *     .exceptionally(error -> { Log.e("Upload", "Error", error); return null; });
+ * 修复版本：
+ * 1. 使用用户 session token 进行认证
+ * 2. 支持图片压缩 (JPEG 格式，质量80%)
+ * 3. 正确的 RLS 策略支持 (userId/avatar.jpg)
  */
 public class SupabaseStorageClient {
-    private static SupabaseStorageClient instance;
-    private final OkHttpClient httpClient;
-    private final Gson gson;
 
-    /**
-     * 私有构造函数 - 单例模式
-     * 配置 HTTP 客户端：
-     * - 连接超时：60秒（文件上传需要较长时间）
-     * - 读取超时：60秒
-     * - 写入超时：60秒
-     */
+    private static final String TAG = "SupabaseStorageClient";
+    private static final MediaType JPEG_MEDIA_TYPE = MediaType.parse("image/jpeg");
+
+    private static volatile SupabaseStorageClient instance;
+    private final OkHttpClient httpClient;
+
     private SupabaseStorageClient() {
         this.httpClient = new OkHttpClient.Builder()
-            .connectTimeout(60, java.util.concurrent.TimeUnit.SECONDS)
-            .readTimeout(60, java.util.concurrent.TimeUnit.SECONDS)
-            .writeTimeout(60, java.util.concurrent.TimeUnit.SECONDS)
-            .build();
-
-        this.gson = new Gson();
+                .addInterceptor(new HttpLoggingInterceptor())
+                .build();
     }
 
-    /**
-     * 获取单例实例 - 线程安全
-     */
-    public static synchronized SupabaseStorageClient getInstance() {
+    public static SupabaseStorageClient getInstance() {
         if (instance == null) {
-            instance = new SupabaseStorageClient();
+            synchronized (SupabaseStorageClient.class) {
+                if (instance == null) {
+                    instance = new SupabaseStorageClient();
+                }
+            }
         }
         return instance;
     }
 
     /**
-     * 上传文件到 Storage
+     * 上传文件到 Storage (Java 兼容版本)
      *
-     * 工作流程：
-     * 1. 构造上传 URL: /storage/v1/object/{bucket}/{filePath}
-     * 2. 使用 PUT 方法上传
-     * 3. 如果成功，返回 public URL
-     *
-     * @param bucketName 存储桶名称（avatars / feedback-images）
-     * @param filePath 文件路径（例如：userId/filename.jpg）
-     * @param fileData 文件二进制数据
-     * @param contentType 内容类型（image/jpeg, image/png, etc.）
-     * @return CompletableFuture<String> 返回文件的 public URL
+     * @param bucketName 存储桶名称 (如: "avatars")
+     * @param filePath 文件路径 (如: "userId/avatar.jpg")
+     * @param fileData 文件字节数组 (JPEG格式)
+     * @param userToken 用户的 session token (必需，用于RLS认证)
+     * @return 文件的 public URL
      */
     public CompletableFuture<String> uploadFile(
-            String bucketName, String filePath, byte[] fileData, String contentType) {
+            String bucketName,
+            String filePath,
+            byte[] fileData,
+            String userToken
+    ) {
+        LogUtils.d(TAG, "Uploading file: " + filePath + " to bucket: " + bucketName);
 
         return CompletableFuture.supplyAsync(() -> {
             try {
-                // 1. 构造上传 URL
-                String uploadUrl = SupabaseConfig.STORAGE_BASE_URL +
-                    "/object/" + bucketName + "/" + filePath;
-
-                // 2. 创建请求体
-                RequestBody requestBody = RequestBody.create(
-                    fileData,
-                    MediaType.parse(contentType)
-                );
-
-                // 3. 创建上传请求
-                Request uploadRequest = new Request.Builder()
-                    .url(uploadUrl)
-                    .addHeader("apikey", SupabaseConfig.SUPABASE_KEY)          // ANON KEY
-                    .addHeader("Authorization", "Bearer " + SupabaseConfig.SUPABASE_KEY) // 使用 ANON KEY 作为 Bearer
-                    .put(requestBody) // 使用 PUT 上传文件
-                    .build();
-
-                // 4. 执行上传
-                Response uploadResponse = httpClient.newCall(uploadRequest).execute();
-
-                if (!uploadResponse.isSuccessful()) {
-                    String errorBody = uploadResponse.body() != null ?
-                        uploadResponse.body().string() : "Unknown error";
-                    throw new IOException("Upload failed: " + uploadResponse.code() +
-                        " - " + uploadResponse.message() + "\n" + errorBody);
+                if (userToken == null || userToken.isEmpty()) {
+                    throw new RuntimeException("User token is required for upload");
                 }
 
-                // 5. 上传成功，返回 public URL
-                return getPublicUrl(bucketName, filePath);
+                // 构造 Storage API URL
+                String uploadUrl = String.format("%s/storage/v1/object/%s/%s",
+                        SupabaseConfig.SUPABASE_URL,
+                        bucketName,
+                        filePath);
 
+                LogUtils.d(TAG, "Upload URL: " + uploadUrl);
+
+                // 创建请求体 (JPEG数据)
+                RequestBody requestBody = RequestBody.create(fileData, JPEG_MEDIA_TYPE);
+
+                // 创建请求 (使用Bearer token认证)
+                Request request = new Request.Builder()
+                        .url(uploadUrl)
+                        .addHeader("Authorization", "Bearer " + userToken)
+                        .addHeader("Content-Type", "image/jpeg")
+                        .put(requestBody)
+                        .build();
+
+                // 执行请求
+                try (Response response = httpClient.newCall(request).execute()) {
+                    String responseBody = response.body() != null ? response.body().string() : "";
+                    LogUtils.d(TAG, "Upload response code: " + response.code());
+                    LogUtils.d(TAG, "Upload response body: " + responseBody);
+
+                    if (!response.isSuccessful()) {
+                        throw new IOException("Upload failed with code " + response.code() + ": " + responseBody);
+                    }
+
+                    // 构造 public URL
+                    String publicUrl = String.format("%s/storage/v1/object/public/%s/%s",
+                            SupabaseConfig.SUPABASE_URL,
+                            bucketName,
+                            filePath);
+
+                    LogUtils.d(TAG, "Public URL: " + publicUrl);
+                    LogUtils.i(TAG, "File uploaded successfully");
+                    return publicUrl;
+
+                }
             } catch (Exception e) {
+                LogUtils.e(TAG, "File upload failed", e);
                 throw new RuntimeException("File upload failed: " + e.getMessage(), e);
             }
         });
@@ -114,16 +121,28 @@ public class SupabaseStorageClient {
     /**
      * 获取文件的 public URL
      *
-     * Supabase Storage 的 public URL 格式：
-     * {SUPABASE_URL}/storage/v1/object/public/{bucket}/{filePath}
-     *
      * @param bucketName 存储桶名称
      * @param filePath 文件路径
-     * @return public URL
+     * @return 文件的 public URL
      */
-    private String getPublicUrl(String bucketName, String filePath) {
-        return SupabaseConfig.SUPABASE_URL +
-               "/storage/v1/object/public/" +
-               bucketName + "/" + filePath;
+    public CompletableFuture<String> getPublicUrl(
+            String bucketName,
+            String filePath
+    ) {
+        return CompletableFuture.supplyAsync(() -> {
+            try {
+                String publicUrl = String.format("%s/storage/v1/object/public/%s/%s",
+                        SupabaseConfig.SUPABASE_URL,
+                        bucketName,
+                        filePath);
+
+                LogUtils.d(TAG, "Public URL: " + publicUrl);
+                return publicUrl;
+
+            } catch (Exception e) {
+                LogUtils.e(TAG, "Failed to get public URL", e);
+                throw new RuntimeException("Failed to get public URL: " + e.getMessage(), e);
+            }
+        });
     }
 }
