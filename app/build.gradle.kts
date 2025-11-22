@@ -75,6 +75,7 @@ dependencies {
     
 
     implementation("com.amap.api:3dmap:10.0.600")
+    implementation("com.amap.api:location:6.1.0")
 
     testImplementation(libs.junit)
     androidTestImplementation(libs.androidx.junit)

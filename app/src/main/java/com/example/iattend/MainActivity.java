@@ -243,7 +243,9 @@ public class MainActivity extends AppCompatActivity {
             });
             clientCls.getMethod("setLocationListener", listenerCls).invoke(mLocationClient, listener);
             clientCls.getMethod("startLocation").invoke(mLocationClient);
-        } catch (Exception ignored) {}
+        } catch (Exception e) {
+            Toast.makeText(this, "定位服务启动失败", Toast.LENGTH_SHORT).show();
+        }
     }
 
     private void showCodeDialog() {

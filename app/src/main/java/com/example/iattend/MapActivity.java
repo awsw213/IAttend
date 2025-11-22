@@ -294,6 +294,11 @@ public class MapActivity extends AppCompatActivity {
         } catch (Exception e) {
             isSign = false;
             android.util.Log.d("MapSign", "startLocation exception: " + (e.getMessage() != null ? e.getMessage() : ""));
+            Toast.makeText(this, "定位服务启动失败，请检查定位权限及组件", Toast.LENGTH_SHORT).show();
+            if (btnSignIn != null) {
+                btnSignIn.setEnabled(false);
+                btnSignIn.setBackgroundColor(Color.GRAY);
+            }
         }
     }
 
