@@ -323,6 +323,7 @@ public class SupabaseClient {
                 throw new RuntimeException("用户未登录");
             }
             try {
+                android.util.Log.d("CheckIn", "submitCheckIn start: code=" + sessionCode + ", lat=" + lat + ", lon=" + lon + ", dist=" + distanceMeters);
                 String sessUrl = SupabaseConfig.REST_BASE_URL + "/" + SupabaseConfig.SESSIONS_TABLE + "?sign_in_code=eq." + sessionCode + "&select=id&limit=1";
                 Request reqSess = new Request.Builder().url(sessUrl).addHeader("apikey", SupabaseConfig.SUPABASE_KEY).addHeader("Authorization", "Bearer " + currentToken).addHeader("Accept", "application/json").get().build();
                 String sessionId = null;
@@ -331,6 +332,9 @@ public class SupabaseClient {
                     if (resp.isSuccessful()) {
                         SessionRow[] rows = gson.fromJson(b, SessionRow[].class);
                         if (rows != null && rows.length > 0) sessionId = rows[0].id;
+                        android.util.Log.d("CheckIn", "fetch sessionId ok: sessionId=" + sessionId);
+                    } else {
+                        android.util.Log.d("CheckIn", "fetch sessionId fail: code=" + resp.code() + ", msg=" + resp.message());
                     }
                 }
 
@@ -338,30 +342,7 @@ public class SupabaseClient {
                 fmt.setTimeZone(java.util.TimeZone.getTimeZone("UTC"));
                 String ts = fmt.format(new java.util.Date(checkedAtMs));
 
-                Map<String, Object> logData = new HashMap<>();
-                logData.put("user_id", currentUser.getId());
-                if (sessionId != null) logData.put("session_id", sessionId); else logData.put("session_code", sessionCode);
-                logData.put("attempted_at", ts);
-                logData.put("status", "success");
-                logData.put("latitude", lat);
-                logData.put("longitude", lon);
-                logData.put("distance_m", distanceMeters);
-                String jsonLog = gson.toJson(logData);
-                RequestBody bodyLog = RequestBody.create(jsonLog, MediaType.get("application/json"));
-                Request reqLog = new Request.Builder()
-                        .url(SupabaseConfig.REST_BASE_URL + "/" + SupabaseConfig.SIGN_IN_LOGS_TABLE)
-                        .addHeader("apikey", SupabaseConfig.SUPABASE_KEY)
-                        .addHeader("Authorization", "Bearer " + currentToken)
-                        .addHeader("Content-Type", "application/json")
-                        .addHeader("Prefer", "return=minimal")
-                        .post(bodyLog)
-                        .build();
-                try (Response r1 = httpClient.newCall(reqLog).execute()) {
-                    if (!r1.isSuccessful()) {
-                        String rb = r1.body() != null ? r1.body().string() : "";
-                        throw new IOException("签到日志写入失败: " + r1.message() + " - " + rb);
-                    }
-                }
+                
 
                 Map<String, Object> recData = new HashMap<>();
                 recData.put("user_id", currentUser.getId());
@@ -379,13 +360,63 @@ public class SupabaseClient {
                         .build();
                 try (Response r2 = httpClient.newCall(reqRec).execute()) {
                     if (r2.isSuccessful()) {
+                        android.util.Log.d("CheckIn", "write record ok");
+                        try {
+                            Map<String, Object> okData = new HashMap<>();
+                            okData.put("user_id", currentUser.getId());
+                            if (sessionId != null) okData.put("session_id", sessionId); else okData.put("session_code", sessionCode);
+                            okData.put("attempted_at", ts);
+                            okData.put("status", "success");
+                            okData.put("latitude", lat);
+                            okData.put("longitude", lon);
+                            okData.put("distance_m", distanceMeters);
+                            String jsonOk = gson.toJson(okData);
+                            RequestBody bodyOk = RequestBody.create(jsonOk, MediaType.get("application/json"));
+                            Request reqOk = new Request.Builder()
+                                    .url(SupabaseConfig.REST_BASE_URL + "/" + SupabaseConfig.SIGN_IN_LOGS_TABLE)
+                                    .addHeader("apikey", SupabaseConfig.SUPABASE_KEY)
+                                    .addHeader("Authorization", "Bearer " + currentToken)
+                                    .addHeader("Content-Type", "application/json")
+                                    .addHeader("Prefer", "return=minimal")
+                                    .post(bodyOk)
+                                    .build();
+                            try (Response ro = httpClient.newCall(reqOk).execute()) {
+                                android.util.Log.d("CheckIn", "write success log status=" + ro.code());
+                            }
+                        } catch (Exception ignore) {}
                         return true;
                     } else {
                         String responseBody = r2.body() != null ? r2.body().string() : "";
+                        android.util.Log.d("CheckIn", "write record fail: code=" + r2.code() + ", msg=" + r2.message() + ", body=" + responseBody);
+                        try {
+                            Map<String, Object> failData = new HashMap<>();
+                            failData.put("user_id", currentUser.getId());
+                            if (sessionId != null) failData.put("session_id", sessionId); else failData.put("session_code", sessionCode);
+                            failData.put("attempted_at", ts);
+                            failData.put("status", "failed");
+                            failData.put("latitude", lat);
+                            failData.put("longitude", lon);
+                            failData.put("distance_m", distanceMeters);
+                            failData.put("error_message", r2.message());
+                            String jsonFail = gson.toJson(failData);
+                            RequestBody bodyFail = RequestBody.create(jsonFail, MediaType.get("application/json"));
+                            Request reqFail = new Request.Builder()
+                                    .url(SupabaseConfig.REST_BASE_URL + "/" + SupabaseConfig.SIGN_IN_LOGS_TABLE)
+                                    .addHeader("apikey", SupabaseConfig.SUPABASE_KEY)
+                                    .addHeader("Authorization", "Bearer " + currentToken)
+                                    .addHeader("Content-Type", "application/json")
+                                    .addHeader("Prefer", "return=minimal")
+                                    .post(bodyFail)
+                                    .build();
+                            try (Response rf = httpClient.newCall(reqFail).execute()) {
+                                android.util.Log.d("CheckIn", "write fail log status=" + rf.code());
+                            }
+                        } catch (Exception ignore) {}
                         throw new IOException("签到上报失败: " + r2.message() + " - " + responseBody);
                     }
                 }
             } catch (Exception e) {
+                android.util.Log.d("CheckIn", "submitCheckIn exception: " + (e.getMessage() != null ? e.getMessage() : ""));
                 throw new RuntimeException("签到上报请求失败", e);
             }
         });

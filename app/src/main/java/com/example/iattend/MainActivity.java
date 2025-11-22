@@ -328,10 +328,12 @@ public class MainActivity extends AppCompatActivity {
 
     private void confirmCheckIn() {
         if (pendingSession == null) {
+            android.util.Log.d("CheckInFlow", "pendingSession null");
             Toast.makeText(this, getString(R.string.please_enter_code), Toast.LENGTH_SHORT).show();
             return;
         }
         if (!hasLocation) {
+            android.util.Log.d("CheckInFlow", "hasLocation false");
             Toast.makeText(this, getString(R.string.enable_gps_retry), Toast.LENGTH_SHORT).show();
             return;
         }
@@ -339,6 +341,7 @@ public class MainActivity extends AppCompatActivity {
         Double cLonD = pendingSession.location_data != null && pendingSession.location_data.lon != null ? pendingSession.location_data.lon : pendingSession.center_lon;
         Double radiusD = pendingSession.location_data != null && pendingSession.location_data.radius_m != null ? pendingSession.location_data.radius_m : pendingSession.radius_m;
         if (cLatD == null || cLonD == null || radiusD == null) {
+            android.util.Log.d("CheckInFlow", "missing location data: lat=" + cLatD + ", lon=" + cLonD + ", radius=" + radiusD);
             Toast.makeText(this, getString(R.string.unable_get_location), Toast.LENGTH_SHORT).show();
             return;
         }
@@ -348,6 +351,7 @@ public class MainActivity extends AppCompatActivity {
         double d = distanceMeters(lastLat, lastLon, cLat, cLon);
         long now = System.currentTimeMillis();
         if (radius > 0 && d > radius) {
+            android.util.Log.d("CheckInFlow", "out_of_range: d=" + d + ", radius=" + radius);
             Toast.makeText(this, getString(R.string.out_of_range), Toast.LENGTH_SHORT).show();
             return;
         }
@@ -355,13 +359,16 @@ public class MainActivity extends AppCompatActivity {
         Long startMs2Parsed = parseIsoToMillis(pendingSession.created_at);
         Long effectiveEnd2 = endMs2Parsed != null ? endMs2Parsed : (startMs2Parsed != null && pendingSession.duration_minutes != null ? startMs2Parsed + pendingSession.duration_minutes * 60_000L : null);
         if (effectiveEnd2 != null && now > effectiveEnd2) {
+            android.util.Log.d("CheckInFlow", "expired: now=" + now + ", end=" + effectiveEnd2);
             Toast.makeText(this, getString(R.string.session_finished), Toast.LENGTH_SHORT).show();
             return;
         }
         if (startMs2Parsed != null && now < startMs2Parsed) {
+            android.util.Log.d("CheckInFlow", "not_started: now=" + now + ", start=" + startMs2Parsed);
             Toast.makeText(this, getString(R.string.out_of_time), Toast.LENGTH_SHORT).show();
             return;
         }
+        android.util.Log.d("CheckInFlow", "proceed: code=" + pendingCode + ", lat=" + lastLat + ", lon=" + lastLon + ", d=" + d);
         String timeStr = new SimpleDateFormat("yyyy/MM/dd HH:mm:ss", Locale.getDefault()).format(new Date());
         new AlertDialog.Builder(this)
                 .setTitle(getString(R.string.please_confirm))

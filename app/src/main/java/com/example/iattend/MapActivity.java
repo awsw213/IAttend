@@ -49,6 +49,7 @@ public class MapActivity extends AppCompatActivity {
     private static final int REQ_LOC = 2002;
     private boolean amapAvailable;
     private String sessionCode;
+    private long signAttemptAt;
 
     public static void start(Context context, double lat, double lon, double radius, String sessionCode) {
         Intent intent = new Intent(context, MapActivity.class);
@@ -78,6 +79,7 @@ public class MapActivity extends AppCompatActivity {
         lat = getIntent().getDoubleExtra("lat", 0);
         lon = getIntent().getDoubleExtra("lon", 0);
         radius = getIntent().getDoubleExtra("radius", 0);
+        sessionCode = getIntent().getStringExtra("sessionCode");
         sessionCode = getIntent().getStringExtra("sessionCode");
         amapAvailable = isClassPresent("com.amap.api.maps.MapView");
         if (amapAvailable) {
@@ -140,15 +142,34 @@ public class MapActivity extends AppCompatActivity {
 
     private void signIn() {
         isSign = true;
+        signAttemptAt = System.currentTimeMillis();
+        android.util.Log.d("MapSign", "sign attempt at=" + signAttemptAt);
         if (locationClient != null && amapAvailable) {
             try {
                 Method stop = locationClient.getClass().getMethod("stopLocation");
                 Method start = locationClient.getClass().getMethod("startLocation");
                 stop.invoke(locationClient);
                 start.invoke(locationClient);
-            } catch (Exception ignored) {}
+            } catch (Exception e) {
+                isSign = false;
+                android.util.Log.d("MapSign", "sign restart exception: " + (e.getMessage() != null ? e.getMessage() : ""));
+                Toast.makeText(this, getString(R.string.unable_get_location), Toast.LENGTH_SHORT).show();
+            }
         } else if (!amapAvailable) {
             Toast.makeText(this, "缺少地图定位组件", Toast.LENGTH_SHORT).show();
+            isSign = false;
+        } else {
+            if (hasLocationPermission()) {
+                try {
+                    startLocation();
+                } catch (Exception e) {
+                    isSign = false;
+                    android.util.Log.d("MapSign", "sign start exception: " + (e.getMessage() != null ? e.getMessage() : ""));
+                    Toast.makeText(this, getString(R.string.unable_get_location), Toast.LENGTH_SHORT).show();
+                }
+            } else {
+                requestLocationPermission();
+            }
         }
     }
 
@@ -229,9 +250,13 @@ public class MapActivity extends AppCompatActivity {
                                 }
                             } else {
                                 String info = String.valueOf(loc.getClass().getMethod("getErrorInfo").invoke(loc));
+                                isSign = false;
+                                android.util.Log.d("MapSign", "loc error: " + info);
                                 runOnUiThread(() -> Toast.makeText(MapActivity.this, "定位失败: " + info, Toast.LENGTH_SHORT).show());
                             }
                         } catch (Exception e) {
+                            isSign = false;
+                            android.util.Log.d("MapSign", "loc exception: " + (e.getMessage() != null ? e.getMessage() : ""));
                             runOnUiThread(() -> Toast.makeText(MapActivity.this, getString(R.string.unable_get_location), Toast.LENGTH_SHORT).show());
                         }
                     }
@@ -241,6 +266,8 @@ public class MapActivity extends AppCompatActivity {
             clientCls.getMethod("setLocationListener", listenerCls).invoke(locationClient, listener);
             clientCls.getMethod("startLocation").invoke(locationClient);
         } catch (Exception e) {
+            isSign = false;
+            android.util.Log.d("MapSign", "startLocation exception: " + (e.getMessage() != null ? e.getMessage() : ""));
             runOnUiThread(() -> Toast.makeText(MapActivity.this, getString(R.string.unable_get_location), Toast.LENGTH_SHORT).show());
         }
     }
