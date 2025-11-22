@@ -117,13 +117,13 @@ public class MapActivity extends AppCompatActivity {
             RelativeLayout root = new RelativeLayout(this);
             root.setLayoutParams(new RelativeLayout.LayoutParams(RelativeLayout.LayoutParams.MATCH_PARENT, RelativeLayout.LayoutParams.MATCH_PARENT));
             TextView info = new TextView(this);
-            info.setText("地图SDK缺失，无法显示地图与定位");
+            info.setText(getString(R.string.map_sdk_missing));
             info.setTextSize(16f);
             RelativeLayout.LayoutParams ip = new RelativeLayout.LayoutParams(RelativeLayout.LayoutParams.WRAP_CONTENT, RelativeLayout.LayoutParams.WRAP_CONTENT);
             ip.addRule(RelativeLayout.CENTER_IN_PARENT);
             root.addView(info, ip);
             Button fallbackBtn = new Button(this);
-            fallbackBtn.setText("签到");
+            fallbackBtn.setText(getString(R.string.check_in));
             fallbackBtn.setEnabled(false);
             RelativeLayout.LayoutParams bp = new RelativeLayout.LayoutParams(RelativeLayout.LayoutParams.WRAP_CONTENT, RelativeLayout.LayoutParams.WRAP_CONTENT);
             bp.addRule(RelativeLayout.ALIGN_PARENT_BOTTOM);
@@ -239,8 +239,8 @@ public class MapActivity extends AppCompatActivity {
                                 Class<?> moCls = Class.forName("com.amap.api.maps.model.MarkerOptions");
                                 Object mo = moCls.getConstructor().newInstance();
                                 mo = moCls.getMethod("position", latLngCls).invoke(mo, latLng);
-                                mo = moCls.getMethod("title", String.class).invoke(mo, "当前位置");
-                                mo = moCls.getMethod("snippet", String.class).invoke(mo, "纬度:" + latitude + ", 经度:" + longitude);
+                                mo = moCls.getMethod("title", String.class).invoke(mo, getString(R.string.current_position));
+                                mo = moCls.getMethod("snippet", String.class).invoke(mo, getString(R.string.position_snippet_format, latitude, longitude));
                                 Class<?> bdfCls = Class.forName("com.amap.api.maps.model.BitmapDescriptorFactory");
                                 Object icon = bdfCls.getMethod("defaultMarker", float.class).invoke(null, 240f);
                                 mo = moCls.getMethod("icon", Class.forName("com.amap.api.maps.model.BitmapDescriptor")).invoke(mo, icon);
@@ -322,12 +322,12 @@ public class MapActivity extends AppCompatActivity {
         countDownTimer = new CountDownTimer(remain, 1000) {
             @Override
             public void onTick(long millisUntilFinished) {
-                tvTimer.setText(millisUntilFinished / 1000 + "秒");
+                tvTimer.setText(getString(R.string.seconds_format, millisUntilFinished / 1000));
             }
 
             @Override
             public void onFinish() {
-                tvTimer.setText("0秒");
+                tvTimer.setText(getString(R.string.seconds_format, 0));
                 btnSignIn.setEnabled(false);
                 btnSignIn.setBackgroundColor(Color.GRAY);
             }

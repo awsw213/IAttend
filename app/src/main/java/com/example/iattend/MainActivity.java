@@ -83,6 +83,10 @@ public class MainActivity extends AppCompatActivity {
     private boolean pendingOpenMap = false;
     private boolean amapAvailable;
     private Long pendingEffectiveEndMs;
+    private boolean createSessionDeferred;
+    private String pendingCreateName;
+    private int pendingCreateExpected;
+    private int pendingCreateMinutes;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -205,6 +209,10 @@ public class MainActivity extends AppCompatActivity {
                                 lastLat = (double) amapLocation.getClass().getMethod("getLatitude").invoke(amapLocation);
                                 lastLon = (double) amapLocation.getClass().getMethod("getLongitude").invoke(amapLocation);
                                 hasLocation = true;
+                                if (createSessionDeferred && pendingCode != null && pendingCreateName != null) {
+                                    createSessionDeferred = false;
+                                    createAndNavigateWithLocation(pendingCode, pendingCreateName, pendingCreateExpected, pendingCreateMinutes);
+                                }
                                 mCurrentDetailedAddress = String.valueOf(amapLocation.getClass().getMethod("getAddress").invoke(amapLocation));
                                 if (isFirstLoc && aMap != null) {
                                     try {
@@ -745,51 +753,54 @@ public class MainActivity extends AppCompatActivity {
             return;
         }
         ensureLocationPermission();
-        if (!hasLocation) {
-            return;
-        }
-        double lat = lastLat;
-        double lon = lastLon;
-        long now = System.currentTimeMillis();
-        long end = now + minutes * 60_000L;
-        double radius = 100.0;
         CompletableFuture.supplyAsync(this::generateUniqueCodeBlocking)
-                .thenCompose(code -> {
-                    runOnUiThread(() -> {
-                        Toast.makeText(this, getString(R.string.code_generated, code), Toast.LENGTH_LONG).show();
-                        pendingCode = code;
-                        SessionInfo s = new SessionInfo();
-                        s.sign_in_code = code;
-                        s.course_name = name;
-                        s.duration_minutes = minutes;
-                        java.text.SimpleDateFormat fmt = new java.text.SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss'Z'", java.util.Locale.US);
-                        fmt.setTimeZone(java.util.TimeZone.getTimeZone("UTC"));
-                        s.created_at = fmt.format(new java.util.Date(now));
-                        s.expires_at = fmt.format(new java.util.Date(end));
-                        LocationData loc = new LocationData();
-                        loc.lat = lat;
-                        loc.lon = lon;
-                        loc.radius_m = radius;
-                        s.location_data = loc;
-                        pendingSession = s;
-                        android.content.Intent intent = new android.content.Intent(MainActivity.this, MonitorActivity.class);
-                        intent.putExtra("code", code);
-                        intent.putExtra("courseName", name);
-                        intent.putExtra("expires_at", s.expires_at);
-                        intent.putStringArrayListExtra("selectedUserIds", new java.util.ArrayList<>(selectedUserIds));
-                        startActivity(intent);
-                    });
-                    return SupabaseClient.getInstance().createAttendSession(code, name, !selectedUserIds.isEmpty() ? selectedUserIds.size() : expected, minutes, lat, lon, radius);
-                })
-                .thenAccept(serverCode -> runOnUiThread(() -> {
-                    if (serverCode != null && !serverCode.equals(pendingCode)) {
-                        pendingCode = serverCode;
+                .thenAccept(code -> runOnUiThread(() -> {
+                    Toast.makeText(this, getString(R.string.code_generated, code), Toast.LENGTH_LONG).show();
+                    pendingCode = code;
+                    pendingCreateName = name;
+                    pendingCreateExpected = !selectedUserIds.isEmpty() ? selectedUserIds.size() : expected;
+                    pendingCreateMinutes = minutes;
+                    if (hasLocation) {
+                        createAndNavigateWithLocation(code, pendingCreateName, pendingCreateExpected, pendingCreateMinutes);
+                    } else {
+                        createSessionDeferred = true;
                     }
                 }))
-                .exceptionally(t -> {
-                    runOnUiThread(() -> Toast.makeText(this, getString(R.string.check_in_report_failed), Toast.LENGTH_SHORT).show());
-                    return null;
-                });
+                .exceptionally(t -> { runOnUiThread(() -> Toast.makeText(this, getString(R.string.check_in_report_failed), Toast.LENGTH_SHORT).show()); return null; });
+    }
+
+    private void createAndNavigateWithLocation(String code, String name, int expected, int minutes) {
+        double lat = lastLat;
+        double lon = lastLon;
+        double radius = 100.0;
+        long now = System.currentTimeMillis();
+        long end = now + minutes * 60_000L;
+        SessionInfo s = new SessionInfo();
+        s.sign_in_code = code;
+        s.course_name = name;
+        s.duration_minutes = minutes;
+        java.text.SimpleDateFormat fmt = new java.text.SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss'Z'", java.util.Locale.US);
+        fmt.setTimeZone(java.util.TimeZone.getTimeZone("UTC"));
+        s.created_at = fmt.format(new java.util.Date(now));
+        s.expires_at = fmt.format(new java.util.Date(end));
+        LocationData loc = new LocationData();
+        loc.lat = lat;
+        loc.lon = lon;
+        loc.radius_m = radius;
+        s.location_data = loc;
+        pendingSession = s;
+        SupabaseClient.getInstance().createAttendSession(code, name, expected, minutes, lat, lon, radius)
+                .thenAccept(serverCode -> runOnUiThread(() -> {
+                    if (serverCode != null && !serverCode.equals(pendingCode)) pendingCode = serverCode;
+                    android.content.Intent intent = new android.content.Intent(MainActivity.this, MonitorActivity.class);
+                    intent.putExtra("code", pendingCode);
+                    intent.putExtra("courseName", name);
+                    intent.putExtra("expires_at", s.expires_at);
+                    intent.putStringArrayListExtra("selectedUserIds", new java.util.ArrayList<>(selectedUserIds));
+                    startActivity(intent);
+                    createSessionDeferred = false;
+                }))
+                .exceptionally(t -> { runOnUiThread(() -> Toast.makeText(this, getString(R.string.check_in_report_failed), Toast.LENGTH_SHORT).show()); return null; });
     }
 
     private String generateUniqueCodeBlocking() {

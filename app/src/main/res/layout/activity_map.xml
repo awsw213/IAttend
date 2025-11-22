@@ -42,7 +42,7 @@
                 <TextView
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
-                    android:text="签到"
+                    android:text="@string/check_in"
                     android:textColor="@color/white"
                     android:textSize="30sp" />
 
@@ -50,7 +50,7 @@
                     android:id="@+id/tvTimer"
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
-                    android:text="261秒"
+                    android:text="@string/seconds_placeholder"
                     android:textColor="@color/white"
                     android:textSize="14sp" />
 
