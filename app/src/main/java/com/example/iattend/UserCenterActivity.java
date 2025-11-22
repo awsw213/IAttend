@@ -14,7 +14,9 @@ import androidx.annotation.Nullable;
 import androidx.appcompat.app.AppCompatActivity;
 
 import com.bumptech.glide.Glide;
+import com.bumptech.glide.load.engine.DiskCacheStrategy;
 import com.example.iattend.backend.AuthService;
+import com.example.iattend.backend.utils.LogUtils;
 import com.example.iattend.domain.model.User;
 
 import java.util.concurrent.CompletableFuture;
@@ -146,7 +148,7 @@ public class UserCenterActivity extends AppCompatActivity {
     }
 
     /**
-     * 使用 Glide 加载头像
+     * 使用 Glide 加载头像（强制跳过缓存）
      */
     private void loadAvatarFromUrl(String avatarUrl) {
         if (avatarUrl == null || avatarUrl.isEmpty()) {
@@ -154,12 +156,17 @@ public class UserCenterActivity extends AppCompatActivity {
         }
 
         try {
+            // 强制刷新：跳过内存和磁盘缓存
             Glide.with(this)
                 .load(avatarUrl)
                 .placeholder(R.drawable.default_avatar)
                 .error(R.drawable.default_avatar)
+                .diskCacheStrategy(DiskCacheStrategy.NONE)
+                .skipMemoryCache(true)
                 .circleCrop()
                 .into(ivAvatar);
+
+            LogUtils.d("UserCenterActivity", "Loading avatar from: " + avatarUrl);
         } catch (Exception e) {
             e.printStackTrace();
         }
