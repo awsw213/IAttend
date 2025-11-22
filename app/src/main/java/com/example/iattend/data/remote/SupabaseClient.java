@@ -323,14 +323,14 @@ public class SupabaseClient {
                 throw new RuntimeException("用户未登录");
             }
             try {
-                String sessUrl = SupabaseConfig.REST_BASE_URL + "/" + SupabaseConfig.SESSIONS_TABLE + "?sign_in_code=eq." + sessionCode + "&select=id&limit=1";
+                String sessUrl = SupabaseConfig.REST_BASE_URL + "/" + SupabaseConfig.SESSIONS_TABLE + "?sign_in_code=eq." + sessionCode + "&select=session_id&limit=1";
                 Request reqSess = new Request.Builder().url(sessUrl).addHeader("apikey", SupabaseConfig.SUPABASE_KEY).addHeader("Authorization", "Bearer " + currentToken).addHeader("Accept", "application/json").get().build();
                 String sessionId = null;
                 try (Response resp = httpClient.newCall(reqSess).execute()) {
                     String b = resp.body() != null ? resp.body().string() : "";
                     if (resp.isSuccessful()) {
                         SessionRow[] rows = gson.fromJson(b, SessionRow[].class);
-                        if (rows != null && rows.length > 0) sessionId = rows[0].id;
+                        if (rows != null && rows.length > 0) sessionId = rows[0].session_id;
                     }
                 }
 
@@ -366,7 +366,7 @@ public class SupabaseClient {
                 Map<String, Object> recData = new HashMap<>();
                 recData.put("user_id", currentUser.getId());
                 if (sessionId != null) recData.put("session_id", sessionId); else recData.put("session_code", sessionCode);
-                recData.put("signed_at", ts);
+                recData.put("signed_in_at", ts);
                 String jsonRec = gson.toJson(recData);
                 RequestBody bodyRec = RequestBody.create(jsonRec, MediaType.get("application/json"));
                 Request reqRec = new Request.Builder()
@@ -391,8 +391,8 @@ public class SupabaseClient {
         });
     }
 
-    private static class SessionRow { String id; String sign_in_code; Integer expected_count; String course_name; }
-    private static class RecordRow { String user_id; Long signed_at; }
+    private static class SessionRow { String session_id; String sign_in_code; Integer expected_count; String course_name; }
+    private static class RecordRow { String user_id; Long signed_in_at; }
 
     public static class SessionStats {
         public int checkedCount;
@@ -481,7 +481,7 @@ public class SupabaseClient {
             int expected = 0;
             String sessionId = null;
             try {
-                String urlSess = SupabaseConfig.REST_BASE_URL + "/" + SupabaseConfig.SESSIONS_TABLE + "?sign_in_code=eq." + sessionCode + "&select=id,expected_count&limit=1";
+                String urlSess = SupabaseConfig.REST_BASE_URL + "/" + SupabaseConfig.SESSIONS_TABLE + "?sign_in_code=eq." + sessionCode + "&select=session_id,expected_count&limit=1";
                 Request request = new Request.Builder()
                         .url(urlSess)
                         .addHeader("apikey", SupabaseConfig.SUPABASE_KEY)
@@ -493,7 +493,7 @@ public class SupabaseClient {
                     if (resp.isSuccessful()) {
                         SessionRow[] rows = gson.fromJson(b, SessionRow[].class);
                         if (rows != null && rows.length > 0) {
-                            sessionId = rows[0].id;
+                            sessionId = rows[0].session_id;
                             if (rows[0].expected_count != null) expected = rows[0].expected_count;
                         }
                     }
@@ -504,9 +504,9 @@ public class SupabaseClient {
             try {
                 String urlChk;
                 if (sessionId != null && !sessionId.isEmpty()) {
-                    urlChk = SupabaseConfig.REST_BASE_URL + "/" + SupabaseConfig.SIGN_IN_RECORDS_TABLE + "?session_id=eq." + sessionId + "&select=user_id,signed_at";
+                    urlChk = SupabaseConfig.REST_BASE_URL + "/" + SupabaseConfig.SIGN_IN_RECORDS_TABLE + "?session_id=eq." + sessionId + "&select=user_id,signed_in_at";
                 } else {
-                    urlChk = SupabaseConfig.REST_BASE_URL + "/" + SupabaseConfig.SIGN_IN_RECORDS_TABLE + "?session_code=eq." + sessionCode + "&select=user_id,signed_at";
+                    urlChk = SupabaseConfig.REST_BASE_URL + "/" + SupabaseConfig.SIGN_IN_RECORDS_TABLE + "?session_code=eq." + sessionCode + "&select=user_id,signed_in_at";
                 }
                 Request request = new Request.Builder()
                         .url(urlChk)
