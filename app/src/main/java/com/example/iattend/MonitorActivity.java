@@ -1,5 +1,6 @@
 package com.example.iattend;
 
+import android.content.Intent;
 import android.os.Bundle;
 import android.os.Handler;
 import android.animation.ObjectAnimator;
@@ -84,6 +85,49 @@ public class MonitorActivity extends AppCompatActivity {
                     cachedProfiles = list != null ? list : new java.util.ArrayList<>();
                 }))
                 .exceptionally(t -> { return null; });
+
+        setupNavigationBar();
+    }
+
+    private void setupNavigationBar() {
+        TextView tvHome = findViewById(R.id.tvHome);
+        TextView tvHistory = findViewById(R.id.tvHistory);
+        TextView tvPersonal = findViewById(R.id.tvPersonal);
+
+        // 设置点击监听器
+        findViewById(R.id.navHome).setOnClickListener(v -> {
+            // 如果已经在首页，不跳转
+            if (this instanceof MonitorActivity) {
+                Intent intent = new Intent(this, MainActivity.class);
+                reOrderTasks(intent);
+                startActivity(intent);
+                overridePendingTransition(0, 0);
+            }
+        });
+
+        findViewById(R.id.navHistory).setOnClickListener(v -> {
+            // 当前已经在历史页面，不做任何操作
+            // 这里可以添加刷新逻辑
+        });
+
+        findViewById(R.id.navPersonalCentre).setOnClickListener(v -> {
+            // 如果当前不在个人中心页面，跳转
+            if (this instanceof MonitorActivity) {
+                Intent intent = new Intent(this, UserCenterActivity.class);
+                reOrderTasks(intent);
+                startActivity(intent);
+                overridePendingTransition(0, 0);
+            }
+        });
+
+        // 高亮当前选中的tab（MonitorActivity对应HISTORY）
+        tvHistory.setSelected(true);
+        tvHome.setSelected(false);
+        tvPersonal.setSelected(false);
+    }
+
+    private void reOrderTasks(Intent intent) {
+        intent.setFlags(Intent.FLAG_ACTIVITY_REORDER_TO_FRONT | Intent.FLAG_ACTIVITY_CLEAR_TOP);
     }
 
     @Override

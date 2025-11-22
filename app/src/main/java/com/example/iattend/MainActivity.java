@@ -2,6 +2,7 @@ package com.example.iattend;
 
 import android.Manifest;
 import android.app.AlertDialog;
+import android.content.Intent;
 import android.content.pm.PackageManager;
 import android.os.Bundle;
 import android.os.Handler;
@@ -145,7 +146,8 @@ public class MainActivity extends AppCompatActivity {
         findViewById(R.id.navHome).setOnClickListener(v -> selectTab(0));
         findViewById(R.id.navHistory).setOnClickListener(v -> selectTab(1));
         findViewById(R.id.navPersonalCentre).setOnClickListener(v -> selectTab(2));
-        selectTab(0);
+        // 初始化时高亮首页
+        tvHome.setSelected(true);
 
         // 预加载所有用户 profiles，用于显示未签到用户列表
         SupabaseClient.getInstance().fetchAllProfiles()
@@ -590,9 +592,55 @@ public class MainActivity extends AppCompatActivity {
 
     private void selectTab(int index) {
         boolean h = index == 0, his = index == 1, p = index == 2;
+
+        // 防止用户快速连续点击
+        tvHome.setEnabled(false);
+        tvHistory.setEnabled(false);
+        tvPersonal.setEnabled(false);
+
         tvHome.setSelected(h);
         tvHistory.setSelected(his);
         tvPersonal.setSelected(p);
+
+        new android.os.Handler().postDelayed(() -> {
+            tvHome.setEnabled(true);
+            tvHistory.setEnabled(true);
+            tvPersonal.setEnabled(true);
+        }, 300);
+
+        Intent intent = null;
+        if (h) {
+            // 如果已经在首页，不做任何操作
+            return;
+        } else if (his) {
+            // 如果没有活动签到，显示提示
+            if (pendingSession == null) {
+                android.widget.Toast.makeText(this, getString(R.string.no_active_session), Toast.LENGTH_SHORT).show();
+                // 恢复按钮状态
+                tvHome.setEnabled(true);
+                tvHistory.setEnabled(true);
+                tvPersonal.setEnabled(true);
+                return;
+            }
+            intent = new Intent(this, MonitorActivity.class);
+            intent.putExtra("code", pendingCode);
+            intent.putExtra("courseName", pendingSession.course_name);
+            intent.putExtra("expires_at", pendingSession.expires_at);
+            intent.putStringArrayListExtra("selectedUserIds", new java.util.ArrayList<>(selectedUserIds));
+            reOrderTasks(intent);
+        } else if (p) {
+            intent = new Intent(this, UserCenterActivity.class);
+            reOrderTasks(intent);
+        }
+
+        if (intent != null) {
+            startActivity(intent);
+            overridePendingTransition(0, 0);
+        }
+    }
+
+    private void reOrderTasks(Intent intent) {
+        intent.setFlags(Intent.FLAG_ACTIVITY_REORDER_TO_FRONT | Intent.FLAG_ACTIVITY_CLEAR_TOP);
     }
 
     private boolean isClassPresent(String name) {
