@@ -71,6 +71,7 @@ dependencies {
     implementation("androidx.recyclerview:recyclerview:1.3.2")
     implementation(libs.androidx.activity)
     implementation(libs.androidx.constraintlayout)
+    implementation(project(":facelib"))
     
 
     // AMap SDK (3D Map & Location)

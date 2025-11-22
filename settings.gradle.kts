@@ -21,3 +21,4 @@ pluginManagement {
 
 rootProject.name = "IAttend"
 include(":app")
+include(":facelib")

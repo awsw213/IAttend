@@ -143,6 +143,17 @@ public class MainActivity extends AppCompatActivity {
         // 初始化时高亮首页
         tvHome.setSelected(true);
 
+        // 预加载所有用户 profiles，用于显示未签到用户列表
+        SupabaseClient.getInstance().fetchAllProfiles()
+                .thenAccept(list -> runOnUiThread(() -> {
+                    cachedProfiles = list != null ? list : new java.util.ArrayList<>();
+                    Log.d("MainActivity", "Loaded " + cachedProfiles.size() + " user profiles");
+                }))
+                .exceptionally(t -> {
+                    Log.e("MainActivity", "Failed to load user profiles", t);
+                    return null;
+                });
+
         boolean fine = ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED;
         boolean coarse = ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_COARSE_LOCATION) == PackageManager.PERMISSION_GRANTED;
         if (fine || coarse) {
@@ -200,11 +211,15 @@ public class MainActivity extends AppCompatActivity {
                                     } catch (Exception ignored) {}
                                 }
                                 if (pendingSession != null && tvSessionInfo != null) {
-                                    double cLat = pendingSession.location_data != null && pendingSession.location_data.lat != null ? pendingSession.location_data.lat : pendingSession.center_lat;
-                                    double cLon = pendingSession.location_data != null && pendingSession.location_data.lon != null ? pendingSession.location_data.lon : pendingSession.center_lon;
-                                    Long endMs = parseIsoToMillis(pendingSession.expires_at);
-                                    double d = distanceMeters(lastLat, lastLon, cLat, cLon);
-                                    runOnUiThread(() -> tvSessionInfo.setText(getString(R.string.session_info_with_distance, safe(pendingSession.course_name), remainingString(endMs), pendingCode, (int) d)));
+                                    Double cLatD = pendingSession.location_data != null && pendingSession.location_data.lat != null ? pendingSession.location_data.lat : pendingSession.center_lat;
+                                    Double cLonD = pendingSession.location_data != null && pendingSession.location_data.lon != null ? pendingSession.location_data.lon : pendingSession.center_lon;
+                                    Long endMsParsed = parseIsoToMillis(pendingSession.expires_at);
+                                    Long startMsParsed = parseIsoToMillis(pendingSession.created_at);
+                                    Long effectiveEndMs = endMsParsed != null ? endMsParsed : (startMsParsed != null && pendingSession.duration_minutes != null ? startMsParsed + pendingSession.duration_minutes * 60_000L : null);
+                                    if (cLatD != null && cLonD != null) {
+                                        double d = distanceMeters(lastLat, lastLon, cLatD, cLonD);
+                                        runOnUiThread(() -> tvSessionInfo.setText(getString(R.string.session_info_with_distance, safe(pendingSession.course_name), remainingString(effectiveEndMs), pendingCode, (int) d)));
+                                    }
                                 }
                             }
                         } catch (Exception ignored) {}
@@ -240,22 +255,31 @@ public class MainActivity extends AppCompatActivity {
                 return;
             }
             long now = System.currentTimeMillis();
-            Long endMs = parseIsoToMillis(session.expires_at);
-            if (endMs != null && now > endMs) {
+            Long endMsParsed = parseIsoToMillis(session.expires_at);
+            Long startMsParsed = parseIsoToMillis(session.created_at);
+            Long effectiveEndMs = endMsParsed != null ? endMsParsed : (startMsParsed != null && session.duration_minutes != null ? startMsParsed + session.duration_minutes * 60_000L : null);
+            if (effectiveEndMs != null && now > effectiveEndMs) {
                 Toast.makeText(this, getString(R.string.code_expired), Toast.LENGTH_SHORT).show();
                 return;
             }
-            Long startMs = parseIsoToMillis(session.created_at);
-            if (startMs != null && now < startMs) {
+            if (startMsParsed != null && now < startMsParsed) {
                 Toast.makeText(this, getString(R.string.out_of_time), Toast.LENGTH_SHORT).show();
                 return;
             }
             pendingCode = code;
             pendingSession = session;
-            tvSessionInfo.setText(getString(R.string.session_info, safe(session.course_name), remainingString(endMs), code));
-            double cLat = session.location_data != null && session.location_data.lat != null ? session.location_data.lat : session.center_lat;
-            double cLon = session.location_data != null && session.location_data.lon != null ? session.location_data.lon : session.center_lon;
-            double rad = session.location_data != null && session.location_data.radius_m != null ? session.location_data.radius_m : (session.radius_m != null ? session.radius_m : 0.0);
+            tvSessionInfo.setText(getString(R.string.session_info, safe(session.course_name), remainingString(effectiveEndMs), code));
+            Double cLatD = session.location_data != null && session.location_data.lat != null ? session.location_data.lat : session.center_lat;
+            Double cLonD = session.location_data != null && session.location_data.lon != null ? session.location_data.lon : session.center_lon;
+            Double radD = session.location_data != null && session.location_data.radius_m != null ? session.location_data.radius_m : session.radius_m;
+            if (cLatD == null || cLonD == null || radD == null) {
+                Toast.makeText(this, getString(R.string.unable_get_location), Toast.LENGTH_SHORT).show();
+                return;
+            }
+            hasLocation = false;
+            double cLat = cLatD;
+            double cLon = cLonD;
+            double rad = radD;
             boolean fine = ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED;
             boolean coarse = ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_COARSE_LOCATION) == PackageManager.PERMISSION_GRANTED;
             if (fine || coarse) {
@@ -268,9 +292,8 @@ public class MainActivity extends AppCompatActivity {
                 pendingOpenMap = true;
                 ActivityCompat.requestPermissions(this, new String[]{Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION}, REQUEST_LOCATION_PERMISSION);
             }
-            startCountdown(endMs);
+            if (effectiveEndMs != null) startCountdown(effectiveEndMs);
             startStatsPolling(code);
-            confirmCheckIn();
         })).exceptionally(t -> {
             runOnUiThread(() -> Toast.makeText(this, getString(R.string.network_failed), Toast.LENGTH_SHORT).show());
             return null;
@@ -314,22 +337,30 @@ public class MainActivity extends AppCompatActivity {
             Toast.makeText(this, getString(R.string.enable_gps_retry), Toast.LENGTH_SHORT).show();
             return;
         }
-        double cLat = pendingSession.location_data != null && pendingSession.location_data.lat != null ? pendingSession.location_data.lat : pendingSession.center_lat;
-        double cLon = pendingSession.location_data != null && pendingSession.location_data.lon != null ? pendingSession.location_data.lon : pendingSession.center_lon;
-        double radius = pendingSession.location_data != null && pendingSession.location_data.radius_m != null ? pendingSession.location_data.radius_m : (pendingSession.radius_m != null ? pendingSession.radius_m : 0.0);
+        Double cLatD = pendingSession.location_data != null && pendingSession.location_data.lat != null ? pendingSession.location_data.lat : pendingSession.center_lat;
+        Double cLonD = pendingSession.location_data != null && pendingSession.location_data.lon != null ? pendingSession.location_data.lon : pendingSession.center_lon;
+        Double radiusD = pendingSession.location_data != null && pendingSession.location_data.radius_m != null ? pendingSession.location_data.radius_m : pendingSession.radius_m;
+        if (cLatD == null || cLonD == null || radiusD == null) {
+            Toast.makeText(this, getString(R.string.unable_get_location), Toast.LENGTH_SHORT).show();
+            return;
+        }
+        double cLat = cLatD;
+        double cLon = cLonD;
+        double radius = radiusD;
         double d = distanceMeters(lastLat, lastLon, cLat, cLon);
         long now = System.currentTimeMillis();
         if (radius > 0 && d > radius) {
             Toast.makeText(this, getString(R.string.out_of_range), Toast.LENGTH_SHORT).show();
             return;
         }
-        Long endMs2 = parseIsoToMillis(pendingSession.expires_at);
-        if (endMs2 != null && now > endMs2) {
+        Long endMs2Parsed = parseIsoToMillis(pendingSession.expires_at);
+        Long startMs2Parsed = parseIsoToMillis(pendingSession.created_at);
+        Long effectiveEnd2 = endMs2Parsed != null ? endMs2Parsed : (startMs2Parsed != null && pendingSession.duration_minutes != null ? startMs2Parsed + pendingSession.duration_minutes * 60_000L : null);
+        if (effectiveEnd2 != null && now > effectiveEnd2) {
             Toast.makeText(this, getString(R.string.session_finished), Toast.LENGTH_SHORT).show();
             return;
         }
-        Long startMs2 = parseIsoToMillis(pendingSession.created_at);
-        if (startMs2 != null && now < startMs2) {
+        if (startMs2Parsed != null && now < startMs2Parsed) {
             Toast.makeText(this, getString(R.string.out_of_time), Toast.LENGTH_SHORT).show();
             return;
         }
@@ -411,7 +442,7 @@ public class MainActivity extends AppCompatActivity {
     }
 
     private void openSignInMap(double lat, double lon, double radius) {
-        MapActivity.start(MainActivity.this, lat, lon, radius);
+        MapActivity.start(MainActivity.this, lat, lon, radius, pendingCode);
     }
 
     @Override
@@ -776,7 +807,12 @@ public class MainActivity extends AppCompatActivity {
                     }
 
                     java.util.List<com.example.iattend.data.remote.model.UserProfile> unsigned = new java.util.ArrayList<>();
+                    Log.d("MainActivity", "loadSessionStats: selectedUserIds=" + selectedUserIds.size()
+                            + ", cachedProfiles=" + (cachedProfiles != null ? cachedProfiles.size() : 0)
+                            + ", checkedIds=" + checkedIds.size());
+
                     if (!selectedUserIds.isEmpty()) {
+                        // 如果创建签到时选择了特定用户，只显示这些用户中未签到的
                         for (String uid : selectedUserIds) {
                             if (!checkedIds.contains(uid)) {
                                 com.example.iattend.data.remote.model.UserProfile found = null;
@@ -792,7 +828,18 @@ public class MainActivity extends AppCompatActivity {
                                 unsigned.add(found);
                             }
                         }
+                    } else {
+                        // 如果没有选择特定用户，显示所有用户中未签到的
+                        if (cachedProfiles != null) {
+                            for (com.example.iattend.data.remote.model.UserProfile p : cachedProfiles) {
+                                if (p != null && !checkedIds.contains(p.getUserId())) {
+                                    unsigned.add(p);
+                                }
+                            }
+                        }
                     }
+
+                    Log.d("MainActivity", "loadSessionStats: unsigned.size=" + unsigned.size());
 
                     if (!unsigned.isEmpty()) {
                         tvNoUnsigned.setVisibility(View.GONE);
