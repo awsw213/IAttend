@@ -274,6 +274,7 @@ public class MainActivity extends AppCompatActivity {
                 Toast.makeText(this, getString(R.string.unable_get_location), Toast.LENGTH_SHORT).show();
                 return;
             }
+            hasLocation = false;
             double cLat = cLatD;
             double cLon = cLonD;
             double rad = radD;
@@ -291,7 +292,6 @@ public class MainActivity extends AppCompatActivity {
             }
             if (effectiveEndMs != null) startCountdown(effectiveEndMs);
             startStatsPolling(code);
-            confirmCheckIn();
         })).exceptionally(t -> {
             runOnUiThread(() -> Toast.makeText(this, getString(R.string.network_failed), Toast.LENGTH_SHORT).show());
             return null;
