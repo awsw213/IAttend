@@ -87,7 +87,22 @@ public class FaceRecognitionActivity extends AppCompatActivity {
                 tvStatus.setText("状态: 人脸通过，正在上报...");
                 doCheckin();
             } else {
-                tvStatus.setText("状态: 人脸未通过");
+                tvStatus.setText("状态: 人脸未通过，正在记录...");
+                SupabaseClient.getInstance()
+                    .submitFailedCheckIn(sessionCode, latitude, longitude, distance,
+                                       System.currentTimeMillis(), "fail_face")
+                    .thenAccept(success -> runOnUiThread(() -> {
+                        if (success) {
+                            tvStatus.setText("状态: 人脸未通过（已记录）");
+                            Toast.makeText(this, "人脸识别未通过，已记录到系统", Toast.LENGTH_SHORT).show();
+                        } else {
+                            tvStatus.setText("状态: 人脸未通过（记录失败）");
+                        }
+                    }))
+                    .exceptionally(t -> {
+                        runOnUiThread(() -> tvStatus.setText("状态: 人脸未通过（记录失败）"));
+                        return null;
+                    });
             }
         }
     }
