@@ -16,6 +16,7 @@ import androidx.appcompat.app.AppCompatActivity;
 import androidx.core.app.ActivityCompat;
 import androidx.core.content.ContextCompat;
 
+import com.example.iattend.data.remote.SupabaseClient;
 import com.google.gson.Gson;
 
 import java.lang.reflect.Constructor;
@@ -254,6 +255,8 @@ public class MapActivity extends AppCompatActivity {
                                     Class<?> amapUtils = Class.forName("com.amap.api.maps.AMapUtils");
                                     float distance = (float) amapUtils.getMethod("calculateLineDistance", latLngCls, latLngCls).invoke(null, latLng, target);
                                     if (distance > (float) radius) {
+                                        // Log distance failure to sign_in_logs with actual location data
+                                        logFailure("fail_geo", "超出位置范围，距离: " + (int)distance + "米，限制: " + (int)radius + "米", latitude, longitude, (int) distance);
                                         runOnUiThread(() -> Toast.makeText(MapActivity.this, "超出位置，无法签到", Toast.LENGTH_SHORT).show());
                                     } else {
                                         runOnUiThread(() -> {
@@ -270,8 +273,13 @@ public class MapActivity extends AppCompatActivity {
                                 }
                             } else {
                                 String info = String.valueOf(loc.getClass().getMethod("getErrorInfo").invoke(loc));
-                                isSign = false;
                                 android.util.Log.d("MapSign", "loc error: " + info);
+                                isSign = false;
+                                // Log location failure to sign_in_logs (without valid location data)
+                                logFailure("fail_geo", "定位失败: " + info, 0, 0, 0);
+                                runOnUiThread(() -> {
+                                    Toast.makeText(MapActivity.this, "定位失败: " + info, Toast.LENGTH_SHORT).show();
+                                });
                             }
                         } catch (Exception e) {
                             isSign = false;
@@ -391,5 +399,29 @@ public class MapActivity extends AppCompatActivity {
                 mapView.getClass().getMethod("onDestroy").invoke(mapView);
             } catch (Exception ignored) {}
         }
+    }
+
+    /**
+     * Log a sign-in failure to sign_in_logs table
+     */
+    private void logFailure(String failReason, String errorInfo, double latitude, double longitude, int distanceMeters) {
+        new Thread(() -> {
+            try {
+                SupabaseClient.getInstance()
+                    .submitFailedCheckIn(sessionCode, latitude, longitude, distanceMeters, System.currentTimeMillis(), failReason)
+                    .thenAccept(success -> {
+                        if (!success) {
+                            android.util.Log.e("MapActivity", "Failed to log failure to sign_in_logs: " + errorInfo);
+                        }
+                    })
+                    .exceptionally(t -> {
+                        android.util.Log.e("MapActivity", "Exception logging failure: " + errorInfo, t);
+                        return null;
+                    })
+                    .join();
+            } catch (Exception e) {
+                android.util.Log.e("MapActivity", "Error logging failure: " + errorInfo, e);
+            }
+        }).start();
     }
 }

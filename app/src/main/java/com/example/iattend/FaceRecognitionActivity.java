@@ -82,12 +82,27 @@ public class FaceRecognitionActivity extends AppCompatActivity {
                 return;
             }
             float sim = computeSimilarity(refBitmap, bmp);
-            tvSimilarity.setText(getString(R.string.similarity_format, String.format(java.util.Locale.getDefault(), "%.3f", sim)));
+            tvSimilarity.setText("相似度: " + String.format(java.util.Locale.getDefault(), "%.3f", sim));
             if (sim >= 0.7f) {
-                tvStatus.setText(getString(R.string.status_reporting));
+                tvStatus.setText("状态: 人脸通过，正在上报...");
                 doCheckin();
             } else {
-                tvStatus.setText(getString(R.string.status_not_passed));
+                tvStatus.setText("状态: 人脸未通过，正在记录...");
+                SupabaseClient.getInstance()
+                    .submitFailedCheckIn(sessionCode, latitude, longitude, distance,
+                                       System.currentTimeMillis(), "fail_face")
+                    .thenAccept(success -> runOnUiThread(() -> {
+                        if (success) {
+                            tvStatus.setText("状态: 人脸未通过（已记录）");
+                            Toast.makeText(this, "人脸识别未通过，已记录到系统", Toast.LENGTH_SHORT).show();
+                        } else {
+                            tvStatus.setText("状态: 人脸未通过（记录失败）");
+                        }
+                    }))
+                    .exceptionally(t -> {
+                        runOnUiThread(() -> tvStatus.setText("状态: 人脸未通过（记录失败）"));
+                        return null;
+                    });
             }
         }
     }
@@ -101,7 +116,7 @@ public class FaceRecognitionActivity extends AppCompatActivity {
             float sim = fr.computeSimilarity(ref, probe);
             return sim;
         } catch (Throwable t) {
-            Toast.makeText(this, getString(R.string.model_load_failed_assets), Toast.LENGTH_SHORT).show();
+            Toast.makeText(this, "模型加载失败，请检查 assets", Toast.LENGTH_SHORT).show();
             return 0f;
         }
     }
@@ -120,9 +135,9 @@ public class FaceRecognitionActivity extends AppCompatActivity {
             is.close();
             refBitmap = bmp;
             ivPreview.setImageBitmap(bmp);
-            Toast.makeText(this, getString(R.string.reference_loaded), Toast.LENGTH_SHORT).show();
+            Toast.makeText(this, "已加载参考图片", Toast.LENGTH_SHORT).show();
         } catch (Exception e) {
-            Toast.makeText(this, getString(R.string.reference_load_failed), Toast.LENGTH_SHORT).show();
+            Toast.makeText(this, "参考图片加载失败", Toast.LENGTH_SHORT).show();
         }
     }
 
@@ -138,27 +153,27 @@ public class FaceRecognitionActivity extends AppCompatActivity {
                 ).thenAccept(success -> {
                     runOnUiThread(() -> {
                         if (success) {
-                            tvStatus.setText(getString(R.string.status_submit_success));
+                            tvStatus.setText("状态: 上报成功");
                             Toast.makeText(this, getString(R.string.check_in_success), Toast.LENGTH_SHORT).show();
                             Intent intent = new Intent(this, MainActivity.class);
                             intent.addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP | Intent.FLAG_ACTIVITY_NEW_TASK);
                             startActivity(intent);
                             finish();
                         } else {
-                            tvStatus.setText(getString(R.string.status_submit_failed));
+                            tvStatus.setText("状态: 上报失败");
                             Toast.makeText(this, getString(R.string.check_in_report_failed), Toast.LENGTH_SHORT).show();
                         }
                     });
                 }).exceptionally(t -> {
                     runOnUiThread(() -> {
-                        tvStatus.setText(getString(R.string.status_submit_failed));
+                        tvStatus.setText("状态: 上报失败");
                         Toast.makeText(this, getString(R.string.check_in_report_failed), Toast.LENGTH_SHORT).show();
                     });
                     return null;
                 }).join();
             } catch (Exception e) {
                 runOnUiThread(() -> {
-                    tvStatus.setText(getString(R.string.status_submit_failed));
+                    tvStatus.setText("状态: 上报失败");
                     Toast.makeText(this, getString(R.string.check_in_report_failed), Toast.LENGTH_SHORT).show();
                 });
             }
