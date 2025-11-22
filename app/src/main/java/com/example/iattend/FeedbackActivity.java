@@ -140,10 +140,9 @@ public class FeedbackActivity extends AppCompatActivity {
      * 提交反馈
      */
     private void submitFeedback() {
-        String type = etType.getText().toString().trim();
-        String content = etContent.getText().toString().trim();
-
-        if (!validateInput(content)) {
+        // 先验证输入（只验证，不保存）
+        String contentToValidate = etContent.getText().toString().trim();
+        if (!validateInput(contentToValidate)) {
             return;
         }
 
@@ -154,16 +153,23 @@ public class FeedbackActivity extends AppCompatActivity {
                 return;
             }
 
-            // 提交反馈（type 将存储在 content 中，因为数据库没有 type 字段）
+            // 在lambda内部重新获取所有值，完全避免访问外部变量
+            String type = etType.getText().toString().trim();
+            String content = etContent.getText().toString().trim();
             String finalContent = type.isEmpty() ? content : "[" + type + "] " + content;
+
+            // 提交反馈（type 将存储在 content 中，因为数据库没有 type 字段）
             submitToServer(user.getId(), finalContent, selectedImageData);
 
         }).exceptionally(throwable -> {
-            String errorMsg = throwable.getMessage();
-            if (errorMsg == null) {
-                errorMsg = "Unknown error";
-            }
-            runOnUiThread(() -> showToast("Failed to get user data: " + errorMsg));
+            // 直接在lambda内部处理errorMsg，避免访问外部变量
+            runOnUiThread(() -> {
+                String errorMsg = throwable.getMessage();
+                if (errorMsg == null) {
+                    errorMsg = "Unknown error";
+                }
+                showToast("Failed to get user data: " + errorMsg);
+            });
             throwable.printStackTrace();  // 打印完整堆栈，方便调试
             return null;
         });
