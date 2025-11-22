@@ -20,6 +20,7 @@ import androidx.appcompat.app.AppCompatActivity;
 import com.example.face.FaceRecognition;
 import com.example.face.TfLiteFaceEmbedder;
 import com.example.iattend.data.remote.SupabaseClient;
+import com.example.iattend.data.remote.model.UserProfile;
 
 public class FaceRecognitionActivity extends AppCompatActivity {
 
@@ -56,8 +57,8 @@ public class FaceRecognitionActivity extends AppCompatActivity {
         latitude = getIntent().getDoubleExtra("latitude", 0);
         longitude = getIntent().getDoubleExtra("longitude", 0);
         distance = getIntent().getIntExtra("distance", 0);
-        loadRefFromAssets();
-        btnCaptureRef.setOnClickListener(v -> loadRefFromAssets());
+        loadRefFromProfileAvatarOrAssets();
+        btnCaptureRef.setOnClickListener(v -> loadRefFromProfileAvatarOrAssets());
         btnVerify.setOnClickListener(v -> {
             if (ensureCameraPermission()) capture(REQ_CAPTURE_PROBE);
         });
@@ -143,6 +144,59 @@ public class FaceRecognitionActivity extends AppCompatActivity {
         } catch (Exception e) {
             Toast.makeText(this, "参考图片加载失败", Toast.LENGTH_SHORT).show();
         }
+    }
+
+    private void loadRefFromProfileAvatarOrAssets() {
+        try {
+            SupabaseClient.getInstance().getCurrentUserProfile()
+                    .thenAccept(profile -> runOnUiThread(() -> {
+                        String url = profile != null ? profile.getAvatarUrl() : null;
+                        if (url != null && !url.isEmpty()) {
+                            fetchBitmapFromUrl(url, bmp -> {
+                                if (bmp != null) {
+                                    refBitmap = bmp;
+                                    ivPreview.setImageBitmap(bmp);
+                                    Toast.makeText(this, "已加载头像作为参考", Toast.LENGTH_SHORT).show();
+                                } else {
+                                    loadRefFromAssets();
+                                }
+                            });
+                        } else {
+                            loadRefFromAssets();
+                        }
+                    }))
+                    .exceptionally(t -> {
+                        runOnUiThread(this::loadRefFromAssets);
+                        return null;
+                    });
+        } catch (Throwable t) {
+            loadRefFromAssets();
+        }
+    }
+
+    private interface BitmapCallback { void onBitmap(Bitmap bmp); }
+
+    private void fetchBitmapFromUrl(String url, BitmapCallback cb) {
+        new Thread(() -> {
+            Bitmap bmp = null;
+            java.net.HttpURLConnection conn = null;
+            try {
+                java.net.URL u = new java.net.URL(url);
+                conn = (java.net.HttpURLConnection) u.openConnection();
+                conn.setConnectTimeout(10000);
+                conn.setReadTimeout(10000);
+                conn.setRequestProperty("Accept", "image/*");
+                conn.connect();
+                try (java.io.InputStream is = conn.getInputStream()) {
+                    bmp = BitmapFactory.decodeStream(is);
+                }
+            } catch (Exception ignored) {
+            } finally {
+                if (conn != null) conn.disconnect();
+            }
+            Bitmap finalBmp = bmp;
+            runOnUiThread(() -> cb.onBitmap(finalBmp));
+        }).start();
     }
 
     private void showSimilarityPopup(float sim) {
