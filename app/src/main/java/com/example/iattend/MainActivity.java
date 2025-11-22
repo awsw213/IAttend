@@ -558,39 +558,25 @@ public class MainActivity extends AppCompatActivity {
             tvPersonal.setEnabled(true);
         }, 300);
 
-        Intent intent = null;
         if (h) {
             // 如果已经在首页，不做任何操作
             return;
         } else if (his) {
-            // 如果没有活动签到，显示提示
-            if (pendingSession == null) {
-                android.widget.Toast.makeText(this, getString(R.string.no_active_session), Toast.LENGTH_SHORT).show();
-                // 恢复按钮状态
-                tvHome.setEnabled(true);
-                tvHistory.setEnabled(true);
-                tvPersonal.setEnabled(true);
-                return;
+            // 从首页跳转到HISTORY，传递当前session数据（如果有的话）
+            Intent intent = new Intent(this, MonitorActivity.class);
+            if (pendingSession != null) {
+                intent.putExtra("code", pendingCode);
+                intent.putExtra("courseName", pendingSession.course_name);
+                intent.putExtra("expires_at", pendingSession.expires_at);
+                intent.putStringArrayListExtra("selectedUserIds", new java.util.ArrayList<>(selectedUserIds));
             }
-            intent = new Intent(this, MonitorActivity.class);
-            intent.putExtra("code", pendingCode);
-            intent.putExtra("courseName", pendingSession.course_name);
-            intent.putExtra("expires_at", pendingSession.expires_at);
-            intent.putStringArrayListExtra("selectedUserIds", new java.util.ArrayList<>(selectedUserIds));
-            reOrderTasks(intent);
+            startActivity(intent);
+            overridePendingTransition(0, 0);
         } else if (p) {
-            intent = new Intent(this, UserCenterActivity.class);
-            reOrderTasks(intent);
-        }
-
-        if (intent != null) {
+            Intent intent = new Intent(this, UserCenterActivity.class);
             startActivity(intent);
             overridePendingTransition(0, 0);
         }
-    }
-
-    private void reOrderTasks(Intent intent) {
-        intent.setFlags(Intent.FLAG_ACTIVITY_REORDER_TO_FRONT | Intent.FLAG_ACTIVITY_CLEAR_TOP);
     }
 
     private boolean isClassPresent(String name) {

@@ -204,22 +204,15 @@ public class UserCenterActivity extends AppCompatActivity {
 
         // 设置点击监听器
         findViewById(R.id.navHome).setOnClickListener(v -> {
-            // 如果当前不在首页，跳转
-            if (this instanceof UserCenterActivity) {
-                Intent intent = new Intent(this, MainActivity.class);
-                reOrderTasks(intent);
-                startActivity(intent);
-                overridePendingTransition(0, 0);
-            }
+            // 从个人中心返回首页
+            onBackPressed();
         });
 
         findViewById(R.id.navHistory).setOnClickListener(v -> {
             // 如果当前不在历史页面，跳转
             if (this instanceof UserCenterActivity) {
-                // 直接跳转到MonitorActivity，暂时不支持传递session数据
-                // 如果需要支持，需要修改MainActivity启动流程
                 Intent intent = new Intent(this, MonitorActivity.class);
-                reOrderTasks(intent);
+                intent.addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP);
                 startActivity(intent);
                 overridePendingTransition(0, 0);
             }
@@ -234,10 +227,6 @@ public class UserCenterActivity extends AppCompatActivity {
         tvPersonal.setSelected(true);
         tvHome.setSelected(false);
         tvHistory.setSelected(false);
-    }
-
-    private void reOrderTasks(Intent intent) {
-        intent.setFlags(Intent.FLAG_ACTIVITY_REORDER_TO_FRONT | Intent.FLAG_ACTIVITY_CLEAR_TOP);
     }
 
     /**
@@ -256,6 +245,13 @@ public class UserCenterActivity extends AppCompatActivity {
      * 启动人脸采集页面
      */
     private void startCollectFaceActivity() {
+        // 检查设备是否支持相机
+        if (!getPackageManager().hasSystemFeature(android.content.pm.PackageManager.FEATURE_CAMERA_FRONT) &&
+            !getPackageManager().hasSystemFeature(android.content.pm.PackageManager.FEATURE_CAMERA)) {
+            showToast("Your device has no camera");
+            return;
+        }
+
         Intent intent = new Intent(this, CollectFaceActivity.class);
         startActivityForResult(intent, REQUEST_IMAGE_CAPTURE);
     }
