@@ -16,13 +16,7 @@ import androidx.appcompat.app.AppCompatActivity;
 
 import com.example.face.FaceRecognition;
 import com.example.face.TfLiteFaceEmbedder;
-import com.google.gson.Gson;
-
-import okhttp3.MediaType;
-import okhttp3.OkHttpClient;
-import okhttp3.Request;
-import okhttp3.RequestBody;
-import okhttp3.Response;
+import com.example.iattend.data.remote.SupabaseClient;
 
 public class FaceRecognitionActivity extends AppCompatActivity {
 
@@ -37,8 +31,10 @@ public class FaceRecognitionActivity extends AppCompatActivity {
 
     private Bitmap refBitmap;
     private String refAssetName;
-    private final OkHttpClient httpClient = new OkHttpClient();
-    private final Gson gson = new Gson();
+    private String sessionCode;
+    private double latitude;
+    private double longitude;
+    private int distance;
 
     @Override
     protected void onCreate(@Nullable Bundle savedInstanceState) {
@@ -53,6 +49,10 @@ public class FaceRecognitionActivity extends AppCompatActivity {
 
         refAssetName = getIntent().getStringExtra("refAssetName");
         if (refAssetName == null || refAssetName.isEmpty()) refAssetName = "IMG_7308.JPG";
+        sessionCode = getIntent().getStringExtra("sessionCode");
+        latitude = getIntent().getDoubleExtra("latitude", 0);
+        longitude = getIntent().getDoubleExtra("longitude", 0);
+        distance = getIntent().getIntExtra("distance", 0);
         loadRefFromAssets();
         btnCaptureRef.setOnClickListener(v -> loadRefFromAssets());
         btnVerify.setOnClickListener(v -> {
@@ -127,18 +127,17 @@ public class FaceRecognitionActivity extends AppCompatActivity {
     }
 
     private void doCheckin() {
-        String userId = getSharedPreferences("auth", MODE_PRIVATE).getString("user_id", "");
         new Thread(() -> {
             try {
-                String url = "http://10.0.2.2:8080/api/checkin";
-                MediaType json = MediaType.parse("application/json; charset=utf-8");
-                String payload = "{\"userId\":\"" + userId + "\"}";
-                RequestBody body = RequestBody.create(payload, json);
-                Request request = new Request.Builder().url(url).post(body).build();
-                try (Response resp = httpClient.newCall(request).execute()) {
-                    boolean ok = resp.isSuccessful();
+                SupabaseClient.getInstance().submitCheckIn(
+                    sessionCode,
+                    latitude,
+                    longitude,
+                    distance,
+                    System.currentTimeMillis()
+                ).thenAccept(success -> {
                     runOnUiThread(() -> {
-                        if (ok) {
+                        if (success) {
                             tvStatus.setText("状态: 上报成功");
                             Toast.makeText(this, getString(R.string.check_in_success), Toast.LENGTH_SHORT).show();
                             Intent intent = new Intent(this, MainActivity.class);
@@ -150,7 +149,13 @@ public class FaceRecognitionActivity extends AppCompatActivity {
                             Toast.makeText(this, getString(R.string.check_in_report_failed), Toast.LENGTH_SHORT).show();
                         }
                     });
-                }
+                }).exceptionally(t -> {
+                    runOnUiThread(() -> {
+                        tvStatus.setText("状态: 上报失败");
+                        Toast.makeText(this, getString(R.string.check_in_report_failed), Toast.LENGTH_SHORT).show();
+                    });
+                    return null;
+                }).join();
             } catch (Exception e) {
                 runOnUiThread(() -> {
                     tvStatus.setText("状态: 上报失败");

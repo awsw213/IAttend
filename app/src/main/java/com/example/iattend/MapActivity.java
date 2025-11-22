@@ -48,12 +48,14 @@ public class MapActivity extends AppCompatActivity {
     private final Gson gson = new Gson();
     private static final int REQ_LOC = 2002;
     private boolean amapAvailable;
+    private String sessionCode;
 
-    public static void start(Context context, double lat, double lon, double radius) {
+    public static void start(Context context, double lat, double lon, double radius, String sessionCode) {
         Intent intent = new Intent(context, MapActivity.class);
         intent.putExtra("lat", lat);
         intent.putExtra("lon", lon);
         intent.putExtra("radius", radius);
+        intent.putExtra("sessionCode", sessionCode);
         context.startActivity(intent);
     }
 
@@ -76,6 +78,7 @@ public class MapActivity extends AppCompatActivity {
         lat = getIntent().getDoubleExtra("lat", 0);
         lon = getIntent().getDoubleExtra("lon", 0);
         radius = getIntent().getDoubleExtra("radius", 0);
+        sessionCode = getIntent().getStringExtra("sessionCode");
         amapAvailable = isClassPresent("com.amap.api.maps.MapView");
         if (amapAvailable) {
             try {
@@ -215,6 +218,10 @@ public class MapActivity extends AppCompatActivity {
                                         runOnUiThread(() -> {
                                             Intent intent = new Intent(MapActivity.this, FaceRecognitionActivity.class);
                                             intent.putExtra("modelAssetName", "mobile_face_net.tflite");
+                                            intent.putExtra("sessionCode", sessionCode);
+                                            intent.putExtra("latitude", latitude);
+                                            intent.putExtra("longitude", longitude);
+                                            intent.putExtra("distance", (int) distance);
                                             startActivity(intent);
                                             finish();
                                         });
@@ -285,33 +292,6 @@ public class MapActivity extends AppCompatActivity {
         }
     }
 
-
-    private void postCheckin(String userId) {
-        CompletableFuture.runAsync(() -> {
-            try {
-                String url = "http://10.0.2.2:8080/api/checkin";
-                MediaType json = MediaType.parse("application/json; charset=utf-8");
-                String payload = "{\"userId\":\"" + userId + "\"}";
-                RequestBody body = RequestBody.create(payload, json);
-                Request request = new Request.Builder().url(url).post(body).build();
-                try (Response resp = httpClient.newCall(request).execute()) {
-                    String b = resp.body() != null ? resp.body().string() : "";
-                    if (resp.isSuccessful()) {
-                        BaseResp r = gson.fromJson(b, BaseResp.class);
-                        runOnUiThread(() -> Toast.makeText(this, r != null ? r.msg : "", Toast.LENGTH_SHORT).show());
-                    }
-                }
-            } catch (Exception e) {
-                runOnUiThread(() -> Toast.makeText(this, getString(R.string.check_in_report_failed), Toast.LENGTH_SHORT).show());
-            }
-        });
-    }
-
-
-    private static class BaseResp {
-        int code;
-        String msg;
-    }
 
     @Override
     protected void onResume() {

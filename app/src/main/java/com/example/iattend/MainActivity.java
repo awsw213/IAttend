@@ -440,7 +440,7 @@ public class MainActivity extends AppCompatActivity {
     }
 
     private void openSignInMap(double lat, double lon, double radius) {
-        MapActivity.start(MainActivity.this, lat, lon, radius);
+        MapActivity.start(MainActivity.this, lat, lon, radius, pendingCode);
     }
 
     @Override
