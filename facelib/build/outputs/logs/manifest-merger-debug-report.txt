@@ -1,0 +1,16 @@
+-- Merging decision tree log ---
+manifest
+ADDED from /Users/zhe/Documents/master/android/Group/code/IAttend/facelib/build/intermediates/tmp/ProcessLibraryManifest/debug/tempAndroidManifest3965005746395306761.xml:2:13-83
+INJECTED from /Users/zhe/Documents/master/android/Group/code/IAttend/facelib/build/intermediates/tmp/ProcessLibraryManifest/debug/tempAndroidManifest3965005746395306761.xml:2:13-83
+	package
+		INJECTED from /Users/zhe/Documents/master/android/Group/code/IAttend/facelib/build/intermediates/tmp/ProcessLibraryManifest/debug/tempAndroidManifest3965005746395306761.xml
+	xmlns:android
+		ADDED from /Users/zhe/Documents/master/android/Group/code/IAttend/facelib/build/intermediates/tmp/ProcessLibraryManifest/debug/tempAndroidManifest3965005746395306761.xml:2:23-81
+uses-sdk
+INJECTED from /Users/zhe/Documents/master/android/Group/code/IAttend/facelib/build/intermediates/tmp/ProcessLibraryManifest/debug/tempAndroidManifest3965005746395306761.xml reason: use-sdk injection requested
+INJECTED from /Users/zhe/Documents/master/android/Group/code/IAttend/facelib/build/intermediates/tmp/ProcessLibraryManifest/debug/tempAndroidManifest3965005746395306761.xml
+INJECTED from /Users/zhe/Documents/master/android/Group/code/IAttend/facelib/build/intermediates/tmp/ProcessLibraryManifest/debug/tempAndroidManifest3965005746395306761.xml
+	android:targetSdkVersion
+		INJECTED from /Users/zhe/Documents/master/android/Group/code/IAttend/facelib/build/intermediates/tmp/ProcessLibraryManifest/debug/tempAndroidManifest3965005746395306761.xml
+	android:minSdkVersion
+		INJECTED from /Users/zhe/Documents/master/android/Group/code/IAttend/facelib/build/intermediates/tmp/ProcessLibraryManifest/debug/tempAndroidManifest3965005746395306761.xml
