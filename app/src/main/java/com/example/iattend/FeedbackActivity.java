@@ -5,8 +5,6 @@ import android.graphics.Bitmap;
 import android.net.Uri;
 import android.os.Bundle;
 import android.view.View;
-import android.widget.ArrayAdapter;
-import android.widget.AutoCompleteTextView;
 import android.widget.Button;
 import android.widget.ImageView;
 import android.widget.ProgressBar;
@@ -43,7 +41,7 @@ import java.util.concurrent.CompletableFuture;
  */
 public class FeedbackActivity extends AppCompatActivity {
 
-    private AutoCompleteTextView actvType;
+    private TextInputEditText etType;
     private TextInputEditText etContent;
     private Button btnSubmit;
     private Button btnSelectImage;
@@ -55,14 +53,6 @@ public class FeedbackActivity extends AppCompatActivity {
 
     private static final int REQUEST_SELECT_IMAGE = 100;
 
-    private static final String[] FEEDBACK_TYPES = {
-        "Function Suggestion",
-        "Bug Report",
-        "UI/UX Improvement",
-        "Performance Issue",
-        "Other"
-    };
-
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
@@ -70,7 +60,6 @@ public class FeedbackActivity extends AppCompatActivity {
 
         initViews();
         initServices();
-        setupFeedbackTypes();
         setupClickListeners();
     }
 
@@ -78,7 +67,7 @@ public class FeedbackActivity extends AppCompatActivity {
      * 初始化视图组件
      */
     private void initViews() {
-        actvType = findViewById(R.id.actvType);
+        etType = findViewById(R.id.actvType);
         etContent = findViewById(R.id.etContent);
         btnSubmit = findViewById(R.id.btnSubmit);
         btnSelectImage = findViewById(R.id.btnSelectImage);
@@ -91,18 +80,6 @@ public class FeedbackActivity extends AppCompatActivity {
      */
     private void initServices() {
         authService = new AuthService();
-    }
-
-    /**
-     * 设置反馈类型下拉框
-     */
-    private void setupFeedbackTypes() {
-        ArrayAdapter<String> adapter = new ArrayAdapter<>(
-            this,
-            android.R.layout.simple_dropdown_item_1line,
-            FEEDBACK_TYPES
-        );
-        actvType.setAdapter(adapter);
     }
 
     /**
@@ -163,25 +140,31 @@ public class FeedbackActivity extends AppCompatActivity {
      * 提交反馈
      */
     private void submitFeedback() {
-        String type = actvType.getText().toString().trim();
+        String type = etType.getText().toString().trim();
         String content = etContent.getText().toString().trim();
 
-        if (!validateInput(type, content)) {
+        if (!validateInput(content)) {
             return;
         }
 
         // 获取当前用户信息
         authService.getCurrentUser().thenAccept(user -> {
-            if (user == null) {
+            if (user == null || user.getId() == null) {
                 runOnUiThread(() -> showToast("User not logged in"));
                 return;
             }
 
-            // 提交反馈
-            submitToServer(user.getId(), type, content, selectedImageData);
+            // 提交反馈（type 将存储在 content 中，因为数据库没有 type 字段）
+            String finalContent = type.isEmpty() ? content : "[" + type + "] " + content;
+            submitToServer(user.getId(), finalContent, selectedImageData);
 
         }).exceptionally(throwable -> {
-            runOnUiThread(() -> showToast("Failed to get user data: " + throwable.getMessage()));
+            String errorMsg = throwable.getMessage();
+            if (errorMsg == null) {
+                errorMsg = "Unknown error";
+            }
+            runOnUiThread(() -> showToast("Failed to get user data: " + errorMsg));
+            throwable.printStackTrace();  // 打印完整堆栈，方便调试
             return null;
         });
     }
@@ -189,12 +172,7 @@ public class FeedbackActivity extends AppCompatActivity {
     /**
      * 验证输入
      */
-    private boolean validateInput(String type, String content) {
-        if (type.isEmpty()) {
-            actvType.setError("Please select feedback type");
-            return false;
-        }
-
+    private boolean validateInput(String content) {
         if (content.isEmpty()) {
             etContent.setError("Please enter feedback content");
             return false;
@@ -211,17 +189,12 @@ public class FeedbackActivity extends AppCompatActivity {
     /**
      * 提交到服务器
      */
-    private void submitToServer(String userId, String type, String content, byte[] imageData) {
+    private void submitToServer(String userId, String content, byte[] imageData) {
         showLoading(true);
 
         FeedbackService feedbackService = new FeedbackService();
 
-        CompletableFuture<Boolean> submitFuture;
-        if (imageData != null && imageData.length > 0) {
-            submitFuture = feedbackService.submitFeedbackWithImage(userId, type, content, imageData);
-        } else {
-            submitFuture = feedbackService.submitFeedback(userId, type, content);
-        }
+        CompletableFuture<Boolean> submitFuture = feedbackService.submit(userId, content, imageData);
 
         submitFuture.thenAccept(success -> {
             runOnUiThread(() -> {

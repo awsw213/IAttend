@@ -37,14 +37,20 @@ public class CollectFaceActivity extends AppCompatActivity {
 
     private static final int REQUEST_CAMERA_PERMISSION = 101;
     private static final String[] CAMERA_PERMISSIONS = {
-            android.Manifest.permission.CAMERA,
-            android.Manifest.permission.WRITE_EXTERNAL_STORAGE
+            android.Manifest.permission.CAMERA
     };
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_collect_face);
+
+        // 首先检查设备是否有相机硬件
+        if (!checkCameraHardware()) {
+            showToast("Device has no camera or camera is not accessible");
+            finish();
+            return;
+        }
 
         initViews();
         authService = new AuthService();
@@ -105,10 +111,14 @@ public class CollectFaceActivity extends AppCompatActivity {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults);
         if (requestCode == REQUEST_CAMERA_PERMISSION) {
             if (grantResults.length > 0 && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
+                // 权限已授予，检查设备是否支持相机
                 if (checkCameraHardware() && textureView.isAvailable()) {
                     setupCamera();
                 } else if (!textureView.isAvailable()) {
                     showToast("Waiting for camera preview...");
+                } else {
+                    // 如果 checkCameraHardware() 返回 false，showToast 已经在里面调用过了
+                    finish();
                 }
             } else {
                 showToast("Camera permission is required to take photos");

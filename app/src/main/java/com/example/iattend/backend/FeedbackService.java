@@ -97,13 +97,12 @@ public class FeedbackService {
      * 提交反馈到数据库（不含图片）
      *
      * @param userId 用户ID（外键）
-     * @param type 反馈类型
      * @param content 反馈内容
      * @return CompletableFuture<Boolean> 成功返回 true
      */
     public CompletableFuture<Boolean> submitFeedback(
-            String userId, String type, String content) {
-        return submitFeedbackInternal(userId, type, content, null);
+            String userId, String content) {
+        return submitFeedbackInternal(userId, content, null);
     }
 
     /**
@@ -117,13 +116,12 @@ public class FeedbackService {
      * 5. 验证响应
      *
      * @param userId 用户ID
-     * @param type 反馈类型
      * @param content 反馈内容
      * @param imageData 图片二进制数据（可选，null 表示无图）
      * @return CompletableFuture<Boolean> 成功返回 true
      */
     public CompletableFuture<Boolean> submitFeedbackWithImage(
-            String userId, String type, String content, byte[] imageData) {
+            String userId, String content, byte[] imageData) {
 
         return CompletableFuture.supplyAsync(() -> {
             try {
@@ -137,7 +135,7 @@ public class FeedbackService {
                 // 2. 创建反馈对象
                 //    - 有图片：imageUrl 会被设置
                 //    - 无图片：imageUrl 为 null
-                Feedback feedback = new Feedback(userId, type, content, imageUrl);
+                Feedback feedback = new Feedback(userId, content, imageUrl);
                 String jsonBody = gson.toJson(feedback);
 
                 // 3. 获取当前用户的 token（RLS 验证需要）
@@ -191,32 +189,31 @@ public class FeedbackService {
      * 内部通用方法：提交反馈（自动判断是否有图片）
      *
      * @param userId 用户ID
-     * @param type 反馈类型
      * @param content 反馈内容
      * @param imageData 图片数据（可为 null）
      * @return CompletableFuture<Boolean>
      */
     private CompletableFuture<Boolean> submitFeedbackInternal(
-            String userId, String type, String content, byte[] imageData) {
+            String userId, String content, byte[] imageData) {
 
         if (imageData != null && imageData.length > 0) {
-            return submitFeedbackWithImage(userId, type, content, imageData);
+            return submitFeedbackWithImage(userId, content, imageData);
         } else {
-            return submitFeedbackWithImage(userId, type, content, null);
+            return submitFeedbackWithImage(userId, content, null);
         }
     }
 
     /**
      * 简化方法：提交反馈（自动处理图片逻辑）
+     * 与 submitFeedback 等同，为了向后兼容
      *
      * @param userId 用户ID
-     * @param type 反馈类型
      * @param content 反馈内容
      * @param imageData 图片数据（可为 null）
      * @return CompletableFuture<Boolean>
      */
     public CompletableFuture<Boolean> submit(
-            String userId, String type, String content, byte[] imageData) {
-        return submitFeedbackInternal(userId, type, content, imageData);
+            String userId, String content, byte[] imageData) {
+        return submitFeedbackInternal(userId, content, imageData);
     }
 }
