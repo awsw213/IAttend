@@ -542,6 +542,9 @@ public class SupabaseClient {
             String sessionId = null;
             try {
                 String urlSess = SupabaseConfig.REST_BASE_URL + "/" + SupabaseConfig.SESSIONS_TABLE + "?sign_in_code=eq." + sessionCode + "&select=session_id,expected_count&limit=1";
+                Log.d("SupabaseClient", "Fetching session with code: " + sessionCode);
+                Log.d("SupabaseClient", "URL: " + urlSess);
+
                 Request request = new Request.Builder()
                         .url(urlSess)
                         .addHeader("apikey", SupabaseConfig.SUPABASE_KEY)
@@ -551,16 +554,22 @@ public class SupabaseClient {
                         .build();
                 try (Response resp = httpClient.newCall(request).execute()) {
                     String b = resp.body() != null ? resp.body().string() : "";
+                    Log.d("SupabaseClient", "Session response: " + b);
                     if (resp.isSuccessful()) {
                         SessionRow[] rows = gson.fromJson(b, SessionRow[].class);
                         if (rows != null && rows.length > 0) {
                             sessionId = rows[0].session_id;
                             if (rows[0].expected_count != null) expected = rows[0].expected_count;
+                            Log.d("SupabaseClient", "Session found: ID=" + sessionId + ", expectedCount=" + expected);
+                        } else {
+                            Log.w("SupabaseClient", "No session found for code: " + sessionCode);
                         }
+                    } else {
+                        Log.e("SupabaseClient", "Failed to fetch session: HTTP " + resp.code() + " - " + b);
                     }
                 }
             } catch (Exception e) {
-                Log.e("SupabaseClient", "Error fetching session: " + e.getMessage());
+                Log.e("SupabaseClient", "Error fetching session: " + e.getMessage(), e);
             }
 
             java.util.List<String> ids = new java.util.ArrayList<>();
@@ -568,6 +577,8 @@ public class SupabaseClient {
                 String urlChk;
                 if (sessionId != null && !sessionId.isEmpty()) {
                     urlChk = SupabaseConfig.REST_BASE_URL + "/" + SupabaseConfig.SIGN_IN_RECORDS_TABLE + "?session_id=eq." + sessionId + "&select=user_id,signed_in_at";
+                    Log.d("SupabaseClient", "Fetching sign-in records for sessionId: " + sessionId);
+                    Log.d("SupabaseClient", "URL: " + urlChk);
                 } else {
                     // 如果找不到sessionId，记录日志并返回空结果
                     Log.w("SupabaseClient", "Session not found for code: " + sessionCode);
@@ -587,14 +598,20 @@ public class SupabaseClient {
                         .build();
                 try (Response resp = httpClient.newCall(request).execute()) {
                     String b = resp.body() != null ? resp.body().string() : "";
+                    Log.d("SupabaseClient", "Sign-in records response: " + b);
                     if (resp.isSuccessful()) {
                         RecordRow[] rows = gson.fromJson(b, RecordRow[].class);
                         if (rows != null) {
+                            Log.d("SupabaseClient", "Found " + rows.length + " sign-in records");
                             for (RecordRow r : rows) if (r != null && r.user_id != null) ids.add(r.user_id);
                         }
+                    } else {
+                        Log.e("SupabaseClient", "Failed to fetch records: HTTP " + resp.code() + " - " + b);
                     }
                 }
-            } catch (Exception ignored) {}
+            } catch (Exception e) {
+                Log.e("SupabaseClient", "Error fetching sign-in records: " + e.getMessage(), e);
+            }
 
             java.util.List<UserProfile> checked = new java.util.ArrayList<>();
             if (!ids.isEmpty()) {
