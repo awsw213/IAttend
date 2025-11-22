@@ -10,6 +10,9 @@ import android.widget.Button;
 import android.widget.ImageView;
 import android.widget.TextView;
 import android.widget.Toast;
+import android.os.Handler;
+import android.os.Looper;
+import androidx.appcompat.app.AlertDialog;
 
 import androidx.annotation.Nullable;
 import androidx.appcompat.app.AppCompatActivity;
@@ -83,26 +86,27 @@ public class FaceRecognitionActivity extends AppCompatActivity {
             }
             float sim = computeSimilarity(refBitmap, bmp);
             tvSimilarity.setText("相似度: " + String.format(java.util.Locale.getDefault(), "%.3f", sim));
+            showSimilarityPopup(sim);
             if (sim >= 0.7f) {
                 tvStatus.setText("状态: 人脸通过，正在上报...");
                 doCheckin();
             } else {
                 tvStatus.setText("状态: 人脸未通过，正在记录...");
                 SupabaseClient.getInstance()
-                    .submitFailedCheckIn(sessionCode, latitude, longitude, distance,
-                                       System.currentTimeMillis(), "fail_face")
-                    .thenAccept(success -> runOnUiThread(() -> {
-                        if (success) {
-                            tvStatus.setText("状态: 人脸未通过（已记录）");
-                            Toast.makeText(this, "人脸识别未通过，已记录到系统", Toast.LENGTH_SHORT).show();
-                        } else {
-                            tvStatus.setText("状态: 人脸未通过（记录失败）");
-                        }
-                    }))
-                    .exceptionally(t -> {
-                        runOnUiThread(() -> tvStatus.setText("状态: 人脸未通过（记录失败）"));
-                        return null;
-                    });
+                        .submitFailedCheckIn(sessionCode, latitude, longitude, distance,
+                                System.currentTimeMillis(), "fail_face")
+                        .thenAccept(success -> runOnUiThread(() -> {
+                            if (success) {
+                                tvStatus.setText("状态: 人脸未通过（已记录）");
+                                Toast.makeText(this, "人脸识别未通过，已记录到系统", Toast.LENGTH_SHORT).show();
+                            } else {
+                                tvStatus.setText("状态: 人脸未通过（记录失败）");
+                            }
+                        }))
+                        .exceptionally(t -> {
+                            runOnUiThread(() -> tvStatus.setText("状态: 人脸未通过（记录失败）"));
+                            return null;
+                        });
             }
         }
     }
@@ -141,15 +145,27 @@ public class FaceRecognitionActivity extends AppCompatActivity {
         }
     }
 
+    private void showSimilarityPopup(float sim) {
+        AlertDialog dialog = new AlertDialog.Builder(this)
+                .setTitle("相似度")
+                .setMessage(String.format(java.util.Locale.getDefault(), "%.3f", sim))
+                .setCancelable(false)
+                .create();
+        dialog.show();
+        new Handler(Looper.getMainLooper()).postDelayed(() -> {
+            if (dialog.isShowing()) dialog.dismiss();
+        }, 2000);
+    }
+
     private void doCheckin() {
         new Thread(() -> {
             try {
                 SupabaseClient.getInstance().submitCheckIn(
-                    sessionCode,
-                    latitude,
-                    longitude,
-                    distance,
-                    System.currentTimeMillis()
+                        sessionCode,
+                        latitude,
+                        longitude,
+                        distance,
+                        System.currentTimeMillis()
                 ).thenAccept(success -> {
                     runOnUiThread(() -> {
                         if (success) {
