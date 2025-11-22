@@ -73,4 +73,5 @@
     <string name="register_success_check_email">Registered successfully! Please check your email to complete verification</string>
     <string name="email_already_registered">This email has already been registered</string>
     <string name="verification_email_resent">Verification email resent. Please check your inbox.</string>
+    <string name="no_active_session">No active sign-in session</string>
 </resources>

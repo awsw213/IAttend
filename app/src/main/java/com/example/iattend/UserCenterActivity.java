@@ -193,6 +193,51 @@ public class UserCenterActivity extends AppCompatActivity {
 
         findViewById(R.id.layoutFeedback).setOnClickListener(v ->
             startActivity(new Intent(UserCenterActivity.this, FeedbackActivity.class)));
+
+        setupNavigationBar();
+    }
+
+    private void setupNavigationBar() {
+        android.widget.TextView tvHome = findViewById(R.id.tvHome);
+        android.widget.TextView tvHistory = findViewById(R.id.tvHistory);
+        android.widget.TextView tvPersonal = findViewById(R.id.tvPersonal);
+
+        // 设置点击监听器
+        findViewById(R.id.navHome).setOnClickListener(v -> {
+            // 如果当前不在首页，跳转
+            if (this instanceof UserCenterActivity) {
+                Intent intent = new Intent(this, MainActivity.class);
+                reOrderTasks(intent);
+                startActivity(intent);
+                overridePendingTransition(0, 0);
+            }
+        });
+
+        findViewById(R.id.navHistory).setOnClickListener(v -> {
+            // 如果当前不在历史页面，跳转
+            if (this instanceof UserCenterActivity) {
+                // 直接跳转到MonitorActivity，暂时不支持传递session数据
+                // 如果需要支持，需要修改MainActivity启动流程
+                Intent intent = new Intent(this, MonitorActivity.class);
+                reOrderTasks(intent);
+                startActivity(intent);
+                overridePendingTransition(0, 0);
+            }
+        });
+
+        findViewById(R.id.navPersonalCentre).setOnClickListener(v -> {
+            // 当前已经在个人中心页面，不做任何操作
+            // 这里可以添加刷新逻辑
+        });
+
+        // 高亮当前选中的tab（UserCenterActivity对应PERSONAL）
+        tvPersonal.setSelected(true);
+        tvHome.setSelected(false);
+        tvHistory.setSelected(false);
+    }
+
+    private void reOrderTasks(Intent intent) {
+        intent.setFlags(Intent.FLAG_ACTIVITY_REORDER_TO_FRONT | Intent.FLAG_ACTIVITY_CLEAR_TOP);
     }
 
     /**
