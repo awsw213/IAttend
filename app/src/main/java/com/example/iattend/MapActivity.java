@@ -85,7 +85,7 @@ public class MapActivity extends AppCompatActivity {
         sessionCode = getIntent().getStringExtra("sessionCode");
         sessionCode = getIntent().getStringExtra("sessionCode");
         expireAtMs = getIntent().getLongExtra("expireAtMs", 0L);
-        amapAvailable = isClassPresent("com.amap.api.maps.MapView");
+        amapAvailable = isClassPresent("com.amap.api.maps.MapView") && isClassPresent("com.amap.api.location.AMapLocationClient");
         if (amapAvailable) {
             try {
                 Class<?> mi = Class.forName("com.amap.api.maps.MapsInitializer");
@@ -164,6 +164,7 @@ public class MapActivity extends AppCompatActivity {
         }
         if (!isSystemLocationEnabled()) {
             isSign = false;
+            Toast.makeText(this, getString(R.string.no_gps), Toast.LENGTH_SHORT).show();
             return;
         }
         if (locationClient != null && amapAvailable) {
@@ -294,7 +295,6 @@ public class MapActivity extends AppCompatActivity {
         } catch (Exception e) {
             isSign = false;
             android.util.Log.d("MapSign", "startLocation exception: " + (e.getMessage() != null ? e.getMessage() : ""));
-            Toast.makeText(this, "定位服务启动失败，请检查定位权限及组件", Toast.LENGTH_SHORT).show();
             if (btnSignIn != null) {
                 btnSignIn.setEnabled(false);
                 btnSignIn.setBackgroundColor(Color.GRAY);

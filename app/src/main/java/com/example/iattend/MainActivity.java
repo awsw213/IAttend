@@ -117,7 +117,7 @@ public class MainActivity extends AppCompatActivity {
             lShow.invoke(null, this, true, true);
             lAgree.invoke(null, this, true);
         } catch (Exception ignored) {}
-        amapAvailable = isClassPresent("com.amap.api.maps.MapView");
+        amapAvailable = isClassPresent("com.amap.api.maps.MapView") && isClassPresent("com.amap.api.location.AMapLocationClient");
         if (amapAvailable && mapContainer != null) {
             try {
                 Class<?> mvCls = Class.forName("com.amap.api.maps.MapView");
@@ -244,7 +244,6 @@ public class MainActivity extends AppCompatActivity {
             clientCls.getMethod("setLocationListener", listenerCls).invoke(mLocationClient, listener);
             clientCls.getMethod("startLocation").invoke(mLocationClient);
         } catch (Exception e) {
-            Toast.makeText(this, "定位服务启动失败", Toast.LENGTH_SHORT).show();
         }
     }
 

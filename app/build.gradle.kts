@@ -38,6 +38,7 @@ android {
     }
 }
 
+
 dependencies {
 
     implementation(libs.androidx.core.ktx)
@@ -74,8 +75,11 @@ dependencies {
     implementation(project(":facelib"))
     
 
-    implementation("com.amap.api:3dmap:10.0.600")
-    implementation("com.amap.api:location:6.1.0")
+    implementation("com.amap.api:3dmap:10.0.600") {
+        exclude(group = "com.squareup.okhttp3", module = "okhttp")
+        exclude(group = "com.squareup.okio", module = "okio")
+        exclude(group = "com.google.code.gson", module = "gson")
+    }
 
     testImplementation(libs.junit)
     androidTestImplementation(libs.androidx.junit)

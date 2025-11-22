@@ -1,16 +1,16 @@
 -- Merging decision tree log ---
 manifest
-ADDED from C:\Users\lyq99\AndroidStudioProjects\IAttend-master1121\IAttend-master\facelib\build\intermediates\tmp\ProcessLibraryManifest\debug\tempAndroidManifest10872424596607685173.xml:2:13-83
-INJECTED from C:\Users\lyq99\AndroidStudioProjects\IAttend-master1121\IAttend-master\facelib\build\intermediates\tmp\ProcessLibraryManifest\debug\tempAndroidManifest10872424596607685173.xml:2:13-83
+ADDED from C:\Users\lyq99\AndroidStudioProjects\IAttend-master1121\IAttend-master\facelib\build\intermediates\tmp\ProcessLibraryManifest\debug\tempAndroidManifest1355573917375672946.xml:2:13-83
+INJECTED from C:\Users\lyq99\AndroidStudioProjects\IAttend-master1121\IAttend-master\facelib\build\intermediates\tmp\ProcessLibraryManifest\debug\tempAndroidManifest1355573917375672946.xml:2:13-83
 	package
-		INJECTED from C:\Users\lyq99\AndroidStudioProjects\IAttend-master1121\IAttend-master\facelib\build\intermediates\tmp\ProcessLibraryManifest\debug\tempAndroidManifest10872424596607685173.xml
+		INJECTED from C:\Users\lyq99\AndroidStudioProjects\IAttend-master1121\IAttend-master\facelib\build\intermediates\tmp\ProcessLibraryManifest\debug\tempAndroidManifest1355573917375672946.xml
 	xmlns:android
-		ADDED from C:\Users\lyq99\AndroidStudioProjects\IAttend-master1121\IAttend-master\facelib\build\intermediates\tmp\ProcessLibraryManifest\debug\tempAndroidManifest10872424596607685173.xml:2:23-81
+		ADDED from C:\Users\lyq99\AndroidStudioProjects\IAttend-master1121\IAttend-master\facelib\build\intermediates\tmp\ProcessLibraryManifest\debug\tempAndroidManifest1355573917375672946.xml:2:23-81
 uses-sdk
-INJECTED from C:\Users\lyq99\AndroidStudioProjects\IAttend-master1121\IAttend-master\facelib\build\intermediates\tmp\ProcessLibraryManifest\debug\tempAndroidManifest10872424596607685173.xml reason: use-sdk injection requested
-INJECTED from C:\Users\lyq99\AndroidStudioProjects\IAttend-master1121\IAttend-master\facelib\build\intermediates\tmp\ProcessLibraryManifest\debug\tempAndroidManifest10872424596607685173.xml
-INJECTED from C:\Users\lyq99\AndroidStudioProjects\IAttend-master1121\IAttend-master\facelib\build\intermediates\tmp\ProcessLibraryManifest\debug\tempAndroidManifest10872424596607685173.xml
+INJECTED from C:\Users\lyq99\AndroidStudioProjects\IAttend-master1121\IAttend-master\facelib\build\intermediates\tmp\ProcessLibraryManifest\debug\tempAndroidManifest1355573917375672946.xml reason: use-sdk injection requested
+INJECTED from C:\Users\lyq99\AndroidStudioProjects\IAttend-master1121\IAttend-master\facelib\build\intermediates\tmp\ProcessLibraryManifest\debug\tempAndroidManifest1355573917375672946.xml
+INJECTED from C:\Users\lyq99\AndroidStudioProjects\IAttend-master1121\IAttend-master\facelib\build\intermediates\tmp\ProcessLibraryManifest\debug\tempAndroidManifest1355573917375672946.xml
 	android:targetSdkVersion
-		INJECTED from C:\Users\lyq99\AndroidStudioProjects\IAttend-master1121\IAttend-master\facelib\build\intermediates\tmp\ProcessLibraryManifest\debug\tempAndroidManifest10872424596607685173.xml
+		INJECTED from C:\Users\lyq99\AndroidStudioProjects\IAttend-master1121\IAttend-master\facelib\build\intermediates\tmp\ProcessLibraryManifest\debug\tempAndroidManifest1355573917375672946.xml
 	android:minSdkVersion
-		INJECTED from C:\Users\lyq99\AndroidStudioProjects\IAttend-master1121\IAttend-master\facelib\build\intermediates\tmp\ProcessLibraryManifest\debug\tempAndroidManifest10872424596607685173.xml
+		INJECTED from C:\Users\lyq99\AndroidStudioProjects\IAttend-master1121\IAttend-master\facelib\build\intermediates\tmp\ProcessLibraryManifest\debug\tempAndroidManifest1355573917375672946.xml
