@@ -50,13 +50,15 @@ public class MapActivity extends AppCompatActivity {
     private boolean amapAvailable;
     private String sessionCode;
     private long signAttemptAt;
+    private long expireAtMs;
 
-    public static void start(Context context, double lat, double lon, double radius, String sessionCode) {
+    public static void start(Context context, double lat, double lon, double radius, String sessionCode, long expireAtMs) {
         Intent intent = new Intent(context, MapActivity.class);
         intent.putExtra("lat", lat);
         intent.putExtra("lon", lon);
         intent.putExtra("radius", radius);
         intent.putExtra("sessionCode", sessionCode);
+        intent.putExtra("expireAtMs", expireAtMs);
         context.startActivity(intent);
     }
 
@@ -81,6 +83,7 @@ public class MapActivity extends AppCompatActivity {
         radius = getIntent().getDoubleExtra("radius", 0);
         sessionCode = getIntent().getStringExtra("sessionCode");
         sessionCode = getIntent().getStringExtra("sessionCode");
+        expireAtMs = getIntent().getLongExtra("expireAtMs", 0L);
         amapAvailable = isClassPresent("com.amap.api.maps.MapView");
         if (amapAvailable) {
             try {
@@ -89,6 +92,11 @@ public class MapActivity extends AppCompatActivity {
                 Method agree = mi.getMethod("updatePrivacyAgree", android.content.Context.class, boolean.class);
                 show.invoke(null, this, true, true);
                 agree.invoke(null, this, true);
+                Class<?> lc = Class.forName("com.amap.api.location.AMapLocationClient");
+                Method lShow = lc.getMethod("updatePrivacyShow", android.content.Context.class, boolean.class, boolean.class);
+                Method lAgree = lc.getMethod("updatePrivacyAgree", android.content.Context.class, boolean.class);
+                lShow.invoke(null, this, true, true);
+                lAgree.invoke(null, this, true);
             } catch (Exception ignored) {}
         }
         if (amapAvailable) {
@@ -144,6 +152,19 @@ public class MapActivity extends AppCompatActivity {
         isSign = true;
         signAttemptAt = System.currentTimeMillis();
         android.util.Log.d("MapSign", "sign attempt at=" + signAttemptAt);
+        if (expireAtMs > 0 && System.currentTimeMillis() > expireAtMs) {
+            isSign = false;
+            if (btnSignIn != null) {
+                btnSignIn.setEnabled(false);
+                btnSignIn.setBackgroundColor(Color.GRAY);
+            }
+            Toast.makeText(this, getString(R.string.code_expired), Toast.LENGTH_SHORT).show();
+            return;
+        }
+        if (!isSystemLocationEnabled()) {
+            isSign = false;
+            return;
+        }
         if (locationClient != null && amapAvailable) {
             try {
                 Method stop = locationClient.getClass().getMethod("stopLocation");
@@ -153,7 +174,6 @@ public class MapActivity extends AppCompatActivity {
             } catch (Exception e) {
                 isSign = false;
                 android.util.Log.d("MapSign", "sign restart exception: " + (e.getMessage() != null ? e.getMessage() : ""));
-                Toast.makeText(this, getString(R.string.unable_get_location), Toast.LENGTH_SHORT).show();
             }
         } else if (!amapAvailable) {
             Toast.makeText(this, "缺少地图定位组件", Toast.LENGTH_SHORT).show();
@@ -165,7 +185,6 @@ public class MapActivity extends AppCompatActivity {
                 } catch (Exception e) {
                     isSign = false;
                     android.util.Log.d("MapSign", "sign start exception: " + (e.getMessage() != null ? e.getMessage() : ""));
-                    Toast.makeText(this, getString(R.string.unable_get_location), Toast.LENGTH_SHORT).show();
                 }
             } else {
                 requestLocationPermission();
@@ -186,7 +205,7 @@ public class MapActivity extends AppCompatActivity {
         try {
             Class<?> clientCls = Class.forName("com.amap.api.location.AMapLocationClient");
             Constructor<?> cons = clientCls.getConstructor(Context.class);
-            locationClient = cons.newInstance(this);
+            locationClient = cons.newInstance(getApplicationContext());
             Class<?> optionCls = Class.forName("com.amap.api.location.AMapLocationClientOption");
             Object option = optionCls.getConstructor().newInstance();
             Class<?> modeCls = Class.forName("com.amap.api.location.AMapLocationClientOption$AMapLocationMode");
@@ -196,6 +215,7 @@ public class MapActivity extends AppCompatActivity {
             setMode.invoke(option, mode);
             optionCls.getMethod("setOnceLocation", boolean.class).invoke(option, false);
             optionCls.getMethod("setInterval", long.class).invoke(option, 5000L);
+            optionCls.getMethod("setNeedAddress", boolean.class).invoke(option, true);
             clientCls.getMethod("setLocationOption", optionCls).invoke(locationClient, option);
             Class<?> listenerCls = Class.forName("com.amap.api.location.AMapLocationListener");
             Object listener = Proxy.newProxyInstance(getClassLoader(), new Class[]{listenerCls}, new InvocationHandler() {
@@ -252,12 +272,10 @@ public class MapActivity extends AppCompatActivity {
                                 String info = String.valueOf(loc.getClass().getMethod("getErrorInfo").invoke(loc));
                                 isSign = false;
                                 android.util.Log.d("MapSign", "loc error: " + info);
-                                runOnUiThread(() -> Toast.makeText(MapActivity.this, "定位失败: " + info, Toast.LENGTH_SHORT).show());
                             }
                         } catch (Exception e) {
                             isSign = false;
                             android.util.Log.d("MapSign", "loc exception: " + (e.getMessage() != null ? e.getMessage() : ""));
-                            runOnUiThread(() -> Toast.makeText(MapActivity.this, getString(R.string.unable_get_location), Toast.LENGTH_SHORT).show());
                         }
                     }
                     return null;
@@ -268,8 +286,14 @@ public class MapActivity extends AppCompatActivity {
         } catch (Exception e) {
             isSign = false;
             android.util.Log.d("MapSign", "startLocation exception: " + (e.getMessage() != null ? e.getMessage() : ""));
-            runOnUiThread(() -> Toast.makeText(MapActivity.this, getString(R.string.unable_get_location), Toast.LENGTH_SHORT).show());
         }
+    }
+
+    private boolean isSystemLocationEnabled() {
+        android.location.LocationManager lm = (android.location.LocationManager) getSystemService(Context.LOCATION_SERVICE);
+        boolean gps = lm != null && lm.isProviderEnabled(android.location.LocationManager.GPS_PROVIDER);
+        boolean network = lm != null && lm.isProviderEnabled(android.location.LocationManager.NETWORK_PROVIDER);
+        return gps || network;
     }
 
     private boolean hasLocationPermission() {
@@ -289,13 +313,13 @@ public class MapActivity extends AppCompatActivity {
             if (granted) {
                 startLocation();
             } else {
-                Toast.makeText(this, getString(R.string.unable_get_location), Toast.LENGTH_SHORT).show();
             }
         }
     }
 
     private void startCountDown() {
-        countDownTimer = new CountDownTimer(261000, 1000) {
+        long remain = expireAtMs > 0 ? Math.max(0, expireAtMs - System.currentTimeMillis()) : 261000;
+        countDownTimer = new CountDownTimer(remain, 1000) {
             @Override
             public void onTick(long millisUntilFinished) {
                 tvTimer.setText(millisUntilFinished / 1000 + "秒");

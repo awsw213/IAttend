@@ -81,6 +81,7 @@ public class MainActivity extends AppCompatActivity {
     private Double pendingOpenLat, pendingOpenLon, pendingOpenRadius;
     private boolean pendingOpenMap = false;
     private boolean amapAvailable;
+    private Long pendingEffectiveEndMs;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -105,6 +106,11 @@ public class MainActivity extends AppCompatActivity {
             Method agree = mi.getMethod("updatePrivacyAgree", android.content.Context.class, boolean.class);
             show.invoke(null, this, true, true);
             agree.invoke(null, this, true);
+            Class<?> lc = Class.forName("com.amap.api.location.AMapLocationClient");
+            Method lShow = lc.getMethod("updatePrivacyShow", android.content.Context.class, boolean.class, boolean.class);
+            Method lAgree = lc.getMethod("updatePrivacyAgree", android.content.Context.class, boolean.class);
+            lShow.invoke(null, this, true, true);
+            lAgree.invoke(null, this, true);
         } catch (Exception ignored) {}
         amapAvailable = isClassPresent("com.amap.api.maps.MapView");
         if (amapAvailable && mapContainer != null) {
@@ -234,12 +240,50 @@ public class MainActivity extends AppCompatActivity {
         EditText input = new EditText(this);
         input.setInputType(InputType.TYPE_CLASS_NUMBER);
         input.setFilters(new InputFilter[]{new InputFilter.LengthFilter(6)});
-        new AlertDialog.Builder(this)
+        AlertDialog dlg = new AlertDialog.Builder(this)
                 .setTitle(getString(R.string.enter_code))
                 .setView(input)
-                .setPositiveButton(getString(R.string.next_step), (d, w) -> performCheckIn(String.valueOf(input.getText())))
+                .setPositiveButton(getString(R.string.next_step), null)
                 .setNegativeButton(getString(R.string.cancel), null)
-                .show();
+                .create();
+        dlg.setOnShowListener(e -> {
+            Button b = dlg.getButton(AlertDialog.BUTTON_POSITIVE);
+            b.setOnClickListener(v -> {
+                String code = String.valueOf(input.getText());
+                if (code == null || !code.matches("\\d{6}")) { input.setError(getString(R.string.invalid_code)); return; }
+                b.setEnabled(false);
+                fetchSessionInfo(code).thenAccept(session -> runOnUiThread(() -> {
+                    b.setEnabled(true);
+                    if (session == null) { input.setError(getString(R.string.invalid_code)); return; }
+                    long now = System.currentTimeMillis();
+                    Long endMsParsed = parseIsoToMillis(session.expires_at);
+                    Long startMsParsed = parseIsoToMillis(session.created_at);
+                    Long effectiveEndMs = endMsParsed != null ? endMsParsed : (startMsParsed != null && session.duration_minutes != null ? startMsParsed + session.duration_minutes * 60_000L : null);
+                    if (effectiveEndMs != null && now > effectiveEndMs) { input.setError(getString(R.string.code_expired)); return; }
+                    if (startMsParsed != null && now < startMsParsed) { input.setError(getString(R.string.out_of_time)); return; }
+                    pendingCode = code;
+                    pendingSession = session;
+                    pendingEffectiveEndMs = effectiveEndMs;
+                    tvSessionInfo.setText(getString(R.string.session_info, safe(session.course_name), remainingString(effectiveEndMs), code));
+                    Double cLatD = session.location_data != null && session.location_data.lat != null ? session.location_data.lat : session.center_lat;
+                    Double cLonD = session.location_data != null && session.location_data.lon != null ? session.location_data.lon : session.center_lon;
+                    Double radD = session.location_data != null && session.location_data.radius_m != null ? session.location_data.radius_m : session.radius_m;
+                    if (cLatD == null || cLonD == null || radD == null) { Toast.makeText(this, getString(R.string.unable_get_location), Toast.LENGTH_SHORT).show(); return; }
+                    hasLocation = false;
+                    double cLat = cLatD;
+                    double cLon = cLonD;
+                    double rad = radD;
+                    boolean fine = ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED;
+                    boolean coarse = ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_COARSE_LOCATION) == PackageManager.PERMISSION_GRANTED;
+                    if (fine || coarse) { openSignInMap(cLat, cLon, rad, pendingEffectiveEndMs != null ? pendingEffectiveEndMs : 0L); initLocationConfig(); }
+                    else { pendingOpenLat = cLat; pendingOpenLon = cLon; pendingOpenRadius = rad; pendingOpenMap = true; ActivityCompat.requestPermissions(this, new String[]{Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION}, REQUEST_LOCATION_PERMISSION); }
+                    if (effectiveEndMs != null) startCountdown(effectiveEndMs);
+                    startStatsPolling(code);
+                    dlg.dismiss();
+                })).exceptionally(t -> { runOnUiThread(() -> { b.setEnabled(true); input.setError(getString(R.string.network_failed)); }); return null; });
+            });
+        });
+        dlg.show();
     }
 
     private void performCheckIn(String code) {
@@ -266,6 +310,7 @@ public class MainActivity extends AppCompatActivity {
             }
             pendingCode = code;
             pendingSession = session;
+            pendingEffectiveEndMs = effectiveEndMs;
             tvSessionInfo.setText(getString(R.string.session_info, safe(session.course_name), remainingString(effectiveEndMs), code));
             Double cLatD = session.location_data != null && session.location_data.lat != null ? session.location_data.lat : session.center_lat;
             Double cLonD = session.location_data != null && session.location_data.lon != null ? session.location_data.lon : session.center_lon;
@@ -281,7 +326,7 @@ public class MainActivity extends AppCompatActivity {
             boolean fine = ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED;
             boolean coarse = ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_COARSE_LOCATION) == PackageManager.PERMISSION_GRANTED;
             if (fine || coarse) {
-                openSignInMap(cLat, cLon, rad);
+                openSignInMap(cLat, cLon, rad, pendingEffectiveEndMs != null ? pendingEffectiveEndMs : 0L);
                 initLocationConfig();
             } else {
                 pendingOpenLat = cLat;
@@ -316,12 +361,11 @@ public class MainActivity extends AppCompatActivity {
             if (granted) {
                 initLocationConfig();
                 if (pendingOpenMap && pendingOpenLat != null && pendingOpenLon != null && pendingOpenRadius != null) {
-                    openSignInMap(pendingOpenLat, pendingOpenLon, pendingOpenRadius);
+                    openSignInMap(pendingOpenLat, pendingOpenLon, pendingOpenRadius, pendingEffectiveEndMs != null ? pendingEffectiveEndMs : 0L);
                 }
                 pendingOpenMap = false;
                 pendingOpenLat = null; pendingOpenLon = null; pendingOpenRadius = null;
             } else {
-                Toast.makeText(this, getString(R.string.unable_get_location), Toast.LENGTH_SHORT).show();
             }
         }
     }
@@ -334,7 +378,6 @@ public class MainActivity extends AppCompatActivity {
         }
         if (!hasLocation) {
             android.util.Log.d("CheckInFlow", "hasLocation false");
-            Toast.makeText(this, getString(R.string.enable_gps_retry), Toast.LENGTH_SHORT).show();
             return;
         }
         Double cLatD = pendingSession.location_data != null && pendingSession.location_data.lat != null ? pendingSession.location_data.lat : pendingSession.center_lat;
@@ -446,8 +489,8 @@ public class MainActivity extends AppCompatActivity {
         } catch (Exception ignored) {}
     }
 
-    private void openSignInMap(double lat, double lon, double radius) {
-        MapActivity.start(MainActivity.this, lat, lon, radius, pendingCode);
+    private void openSignInMap(double lat, double lon, double radius, long expireAtMs) {
+        MapActivity.start(MainActivity.this, lat, lon, radius, pendingCode, expireAtMs);
     }
 
     @Override
@@ -655,7 +698,6 @@ public class MainActivity extends AppCompatActivity {
         }
         ensureLocationPermission();
         if (!hasLocation) {
-            Toast.makeText(this, getString(R.string.unable_get_location), Toast.LENGTH_SHORT).show();
             return;
         }
         double lat = lastLat;
@@ -730,15 +772,26 @@ public class MainActivity extends AppCompatActivity {
     private Long parseIsoToMillis(String iso) {
         if (iso == null || iso.isEmpty()) return null;
         try {
-            java.time.Instant inst = java.time.Instant.parse(iso);
-            return inst.toEpochMilli();
-        } catch (Exception e) {
+            return java.time.Instant.parse(iso).toEpochMilli();
+        } catch (Exception ignored) {}
+        try {
+            return java.time.OffsetDateTime.parse(iso).toInstant().toEpochMilli();
+        } catch (Exception ignored) {}
+        String[] ps = new String[]{
+                "yyyy-MM-dd'T'HH:mm:ss.SSSXXX",
+                "yyyy-MM-dd'T'HH:mm:ssXXX",
+                "yyyy-MM-dd'T'HH:mm:ss.SSS'Z'",
+                "yyyy-MM-dd'T'HH:mm:ss'Z'"
+        };
+        for (String p : ps) {
             try {
-                java.text.SimpleDateFormat f = new java.text.SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss'Z'", java.util.Locale.US);
+                java.text.SimpleDateFormat f = new java.text.SimpleDateFormat(p, java.util.Locale.US);
                 f.setTimeZone(java.util.TimeZone.getTimeZone("UTC"));
-                return f.parse(iso).getTime();
-            } catch (Exception ex) { return null; }
+                java.util.Date d = f.parse(iso);
+                if (d != null) return d.getTime();
+            } catch (Exception ignored) {}
         }
+        return null;
     }
 
     private void startStatsPolling(String sign_in_code) {

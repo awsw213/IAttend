@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
-<RelativeLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    <RelativeLayout xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto"
     xmlns:tools="http://schemas.android.com/tools"
     android:layout_width="match_parent"
@@ -14,9 +14,10 @@
 
     <RelativeLayout
         android:layout_width="match_parent"
-        android:layout_height="240dp"
+        android:layout_height="wrap_content"
         android:layout_alignParentBottom="true"
         android:layout_marginHorizontal="10dp"
+        android:layout_marginBottom="24dp"
         android:orientation="vertical">
 
         <androidx.cardview.widget.CardView
@@ -63,17 +64,8 @@
             android:layout_alignParentBottom="true"
             android:background="@color/white"
             android:gravity="bottom"
-            android:orientation="vertical">
-
-            <TextView
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:layout_gravity="bottom"
-                android:layout_margin="10dp"
-                android:text="请仔细核对信息!否则会影响后面的签到!\n课程名:gudjx\n教师:0c36Gi2w3V60Y23yXC1W3EAKYn06Gi21"
-                android:textColor="@color/black"
-                android:textSize="14sp" />
-        </LinearLayout>
+            android:orientation="vertical"
+            android:visibility="gone" />
 
     </RelativeLayout>
 </RelativeLayout>

@@ -74,7 +74,6 @@ dependencies {
     implementation(project(":facelib"))
     
 
-    // AMap SDK (仅使用 3dmap，避免与 location 产生重复类)
     implementation("com.amap.api:3dmap:10.0.600")
 
     testImplementation(libs.junit)
