@@ -13,7 +13,7 @@
     <string name="home">首页</string>
     <string name="history">历史</string>
     <string name="personal_centre">个人中心</string>
-    <string name="check_in">立即签到</string>
+    <string name="check_in">签到</string>
 
     <string name="enter_email">请输入邮箱</string>
     <string name="enter_password">请输入密码</string>
@@ -80,4 +80,22 @@
     <string name="register_success_check_email">注册成功！请查收邮箱完成验证</string>
     <string name="email_already_registered">该邮箱已被注册</string>
     <string name="verification_email_resent">验证邮件已重新发送，请查收邮箱</string>
+    <string name="map_sdk_missing">地图SDK缺失，无法显示地图与定位</string>
+    <string name="seconds_format">%1$d 秒</string>
+    <string name="seconds_placeholder">0 秒</string>
+    <string name="current_position">当前位置</string>
+    <string name="position_snippet_format">纬度:%1$.6f, 经度:%2$.6f</string>
+    <string name="reference_loaded">已加载参考图片</string>
+    <string name="reference_load_failed">参考图片加载失败</string>
+    <string name="model_load_failed_assets">模型加载失败，请检查 assets</string>
+    <string name="similarity_format">相似度: %1$s</string>
+    <string name="status_reporting">状态: 人脸通过，正在上报...</string>
+    <string name="status_not_passed">状态: 人脸未通过</string>
+    <string name="status_submit_success">状态: 上报成功</string>
+    <string name="status_submit_failed">状态: 上报失败</string>
+    <string name="remaining_time_format">剩余时间 %1$s</string>
+    <string name="sign_in_ended">签到已结束</string>
+    <string name="sign_in_closed">本次签到已关闭</string>
+    <string name="got_it">知道了</string>
+    <string name="people_count_format">%1$d 人</string>
 </resources>

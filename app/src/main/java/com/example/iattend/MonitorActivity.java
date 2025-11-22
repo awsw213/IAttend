@@ -77,7 +77,7 @@ public class MonitorActivity extends AppCompatActivity {
         String remain = formatMMSS(nowRemain);
         tvCourseTitle.setText(safe(courseName));
         tvCode.setText(code);
-        tvCountdown.setText("剩余时间 " + remain);
+        tvCountdown.setText(getString(R.string.remaining_time_format, remain));
         startCountdown(endMs);
         startStatsPolling(code);
         SupabaseClient.getInstance().fetchAllProfiles()
@@ -197,7 +197,7 @@ public class MonitorActivity extends AppCompatActivity {
     }
 
     private void startCountdown(Long endMs) {
-        if (endMs == null) { tvCountdown.setText("剩余时间 00:00"); return; }
+        if (endMs == null) { tvCountdown.setText(getString(R.string.remaining_time_format, "00:00")); return; }
         targetEndMs = endMs;
         endDialogShown = false;
         tvCode.setVisibility(View.VISIBLE);
@@ -221,7 +221,7 @@ public class MonitorActivity extends AppCompatActivity {
                 long now = System.currentTimeMillis();
                 long remain = targetEndMs - now;
                 if (remain <= 0) {
-                    tvCountdown.setText("剩余时间 00:00");
+                    tvCountdown.setText(getString(R.string.remaining_time_format, "00:00"));
                     stopBlink();
                     if (!endDialogShown) {
                         endDialogShown = true;
@@ -229,7 +229,7 @@ public class MonitorActivity extends AppCompatActivity {
                     }
                     return;
                 }
-                tvCountdown.setText("剩余时间 " + formatMMSS(remain));
+                tvCountdown.setText(getString(R.string.remaining_time_format, formatMMSS(remain)));
                 if (remain <= 60_000L) startBlink(); else stopBlink();
                 tickerHandler.postDelayed(this, 1000);
             }
@@ -263,9 +263,9 @@ public class MonitorActivity extends AppCompatActivity {
     private void closeSignIn() {
         tvCode.setVisibility(View.GONE);
         new androidx.appcompat.app.AlertDialog.Builder(this)
-                .setTitle("签到已结束")
-                .setMessage("本次签到已关闭")
-                .setPositiveButton("知道了", (d, w) -> d.dismiss())
+                .setTitle(getString(R.string.sign_in_ended))
+                .setMessage(getString(R.string.sign_in_closed))
+                .setPositiveButton(getString(R.string.got_it), (d, w) -> d.dismiss())
                 .show();
     }
 
@@ -352,7 +352,7 @@ public class MonitorActivity extends AppCompatActivity {
                     } else {
                         tvNoUnsigned.setVisibility(View.VISIBLE);
                     }
-                    tvUnsignedCount.setText(unsigned.size() + " 人");
+                    tvUnsignedCount.setText(getString(R.string.people_count_format, unsigned.size()));
                     unsignedAdapter.setItems(unsigned);
                 }))
                 .exceptionally(t -> { return null; });

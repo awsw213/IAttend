@@ -74,9 +74,8 @@ dependencies {
     implementation(project(":facelib"))
     
 
-    // AMap SDK (3D Map & Location)
     implementation("com.amap.api:3dmap:10.0.600")
-    // Remove AMap Location to avoid duplicate classes with 3dmap; 3dmap ships fence/location APIs
+    implementation("com.amap.api:location:6.1.0")
 
     testImplementation(libs.junit)
     androidTestImplementation(libs.androidx.junit)

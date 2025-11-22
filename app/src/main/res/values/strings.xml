@@ -74,4 +74,22 @@
     <string name="email_already_registered">This email has already been registered</string>
     <string name="verification_email_resent">Verification email resent. Please check your inbox.</string>
     <string name="no_active_session">No active sign-in session</string>
+    <string name="map_sdk_missing">Map SDK missing; cannot display map and location</string>
+    <string name="seconds_format">%1$d s</string>
+    <string name="seconds_placeholder">0 s</string>
+    <string name="current_position">Current Position</string>
+    <string name="position_snippet_format">Lat: %1$.6f, Lon: %2$.6f</string>
+    <string name="reference_loaded">Reference image loaded</string>
+    <string name="reference_load_failed">Failed to load reference image</string>
+    <string name="model_load_failed_assets">Model load failed, please check assets</string>
+    <string name="similarity_format">Similarity: %1$s</string>
+    <string name="status_reporting">Status: Face passed, reporting...</string>
+    <string name="status_not_passed">Status: Face not passed</string>
+    <string name="status_submit_success">Status: Submitted successfully</string>
+    <string name="status_submit_failed">Status: Submission failed</string>
+    <string name="remaining_time_format">Remaining %1$s</string>
+    <string name="sign_in_ended">Sign-in ended</string>
+    <string name="sign_in_closed">This sign-in is closed</string>
+    <string name="got_it">Got it</string>
+    <string name="people_count_format">%1$d people</string>
 </resources>
