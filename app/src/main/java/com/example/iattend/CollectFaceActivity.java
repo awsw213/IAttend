@@ -459,11 +459,13 @@ public class CollectFaceActivity extends AppCompatActivity {
         // 计算旋转角度
         int rotateDegree;
         if (cameraInfo.facing == Camera.CameraInfo.CAMERA_FACING_FRONT) {
-            // 前置摄像头：减去设备旋转角度
-            rotateDegree = (cameraInfo.orientation - degrees + 360) % 360;
+            // 前置摄像头：减去设备旋转角度 + 额外180度补偿
+            rotateDegree = (cameraInfo.orientation - degrees + 180 + 360) % 360;
+            LogUtils.d("CollectFaceActivity", "Front camera rotation: camera=" + cameraInfo.orientation + ", device=" + degrees + ", final=" + rotateDegree);
         } else {
             // 后置摄像头：减去设备旋转角度
             rotateDegree = (cameraInfo.orientation - degrees + 360) % 360;
+            LogUtils.d("CollectFaceActivity", "Back camera rotation: camera=" + cameraInfo.orientation + ", device=" + degrees + ", final=" + rotateDegree);
         }
 
         // 前置摄像头需要镜像处理（必须在旋转之前！）
